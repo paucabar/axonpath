@@ -26,9 +26,10 @@ class pipeline(nn.Module):
 
     def forward(self,data : torch.Tensor):
         pred = self.model(data)
-        semantic = last_layer_fn_torchscript(pred[:, 0:4, :, :])
-        distance_transform = pred[:, 0:4, :, :]
-        output = torch.cat((semantic, distance_transform), axis=1)
+        semantic = last_layer_fn_torchscript(pred[:, 0:3, :, :])
+        distance_transform_fibre = pred[:, 3, :, :]
+        distance_transform_axon = pred[:, 4, :, :]
+        output = torch.cat((semantic, distance_transform_fibre, distance_transform_axon), dim=0)
 
         return output[None].float()
 
@@ -46,9 +47,10 @@ class pipeline_padding(nn.Module):
 
         # Forward pass through the model
         pred = self.model(data)
-        semantic = last_layer_fn_torchscript(pred[:, 0:4, :, :])
-        distance_transform = pred[:, 4, :, :]
-        output = torch.cat((semantic, distance_transform), dim=0)
+        semantic = last_layer_fn_torchscript(pred[:, 0:3, :, :])
+        distance_transform_fibre = pred[:, 3, :, :]
+        distance_transform_axon = pred[:, 4, :, :]
+        output = torch.cat((semantic, distance_transform_fibre, distance_transform_axon), dim=0)
         
         output = output[None]
 
@@ -135,7 +137,7 @@ def export_bioimageio(model: monai.networks.nets.unet.UNet, model_name: str, dee
         output_names = ["semantic"],
         output_axes=["bcyx"],
         output_reference = ["raw"],
-        output_scale = [[1.0, 2.0, 1.0, 1.0]],
+        output_scale = [[1.0, 3.0, 1.0, 1.0]],
         output_offset = [[0.0, 0.0, 0.0, 0.0]],
         preprocessing = None,
         add_deepimagej_config = deepimagej,
