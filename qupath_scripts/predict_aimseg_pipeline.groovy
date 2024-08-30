@@ -1,0 +1,157 @@
+/**
+ * This script demonstrates how to run a model using DJL in QuPath.
+ *
+ * You should first install the DJL extension in QuPath, and download PyTorch -
+ * see https://qupath.readthedocs.io/en/stable/docs/deep/djl.html
+ */
+
+import ij.ImagePlus
+import ij.process.ImageStatistics
+import qupath.lib.images.servers.PixelType
+import qupath.lib.regions.Padding
+import qupath.lib.regions.RegionRequest
+import qupath.opencv.ops.ImageOps
+import qupath.opencv.tools.OpenCVTools
+
+import ij.process.ImageProcessor
+import qupath.imagej.processing.SimpleThresholding
+import qupath.lib.roi.RoiTools
+import qupath.imagej.processing.RoiLabeling
+import ij.measure.Calibration
+import qupath.lib.regions.ImagePlane
+
+import qupath.imagej.processing.Watershed
+import qupath.imagej.tools.IJTools
+import qupath.lib.common.ColorTools
+import qupath.lib.common.GeneralTools
+import qupath.lib.images.servers.LabeledImageServer
+import qupath.lib.objects.PathObjects
+
+import java.nio.file.Paths
+
+import static qupath.lib.gui.scripting.QPEx.*
+import qupath.ext.djl.DjlTools
+
+def modelPath = "D:/pcarrillo/Git_Repos/AimSeg-Monai_3Targets/data_evaluation/lee_alpha_03_01_3targets_bigmodel/weights.pt"
+def uri = Paths.get(modelPath).toUri()
+def imageData = getCurrentImageData()
+
+int inputWidth = 512
+int inputHeight = inputWidth
+int nChannels = 1
+def padding = Padding.symmetric(32)
+def layout = "NCHW"
+def inputShape = [1, nChannels, inputHeight, inputWidth]
+double downsample = 4.0
+double min_threshold = 0.7
+double max_threshold = 1
+
+
+void processImage(ImagePlus imp, String className, int channel, double min_threshold, double max_threshold, double downsample, imageData, request) {
+    // Create ROIs from thresholds
+    imp.setC(channel) // Set the channel index (1-based)
+    ImageProcessor ip = imp.getProcessor() // Get the ImageProcessor of the specified channel
+    ip.setThreshold(min_threshold, max_threshold, ImageProcessor.NO_LUT_UPDATE)
+    def multipartRoi = SimpleThresholding.thresholdToROI(ip, request) // generates a multi-part ROI including all the thresholded regions
+    def roiList = RoiTools.splitROI(multipartRoi) // split the multi-part ROI into separate ROIs
+    
+    // Convert QuPath ROIs to objects
+    def pathObjects = roiList.collect { roi ->
+        return PathObjects.createAnnotationObject(roi, getPathClass("Seed"))
+    }
+    addObjects(pathObjects)
+    
+    // Create an ImageServer for seed instances
+    def minSize = 100
+    def seedServer = new LabeledImageServer.Builder(imageData)
+            .backgroundLabel(0, ColorTools.BLACK) // Specify background label (usually 0 or 255)
+            .downsample(downsample)    // Choose server resolution; this should match the resolution at which tiles are exported
+            .useAnnotations()
+            .useInstanceLabels()
+            .useFilter(p -> p.isAnnotation() && p.getPathClass() == getPathClass('Seed') && p.getROI().getArea() > minSize)
+            .multichannelOutput(false) // If true, each label refers to the channel of a multichannel binary image (required for multiclass probability)
+            .build()
+    
+    // Uncomment if you want to export the label image
+    def name = GeneralTools.stripExtension(imageData.getServer().getMetadata().getName()) // get image name to export annotations
+    //def pathLabel = buildFilePath(labelDir, name + ".tif") // Define instance output file paths
+    //writeImage(seedServer, pathLabel) // write the image
+    
+    // Open the seed labels with ImageJ
+    ImagePlus impLabels = IJTools.convertToImagePlus(seedServer, request).getImage()
+    ImageProcessor ipLabels = impLabels.getProcessor()
+    
+    // Delete all existing objects
+    removeObjects(getCurrentImageData().getHierarchy().getAnnotationObjects().findAll { it.getPathClass() == getPathClass("Seed") }, true)
+    
+    // Apply a 2D watershed transform, constraining region growing using an intensity threshold.
+    // Parameters:
+    // ip - image containing intensity information
+    // ipLabels - image containing starting labels; these will be modified
+    // minIntensity - minimum threshold; labels will not expand into pixels with values below the threshold
+    // conn8 - true if 8-connectivity should be used; alternative is 4-connectivity
+    
+    // Use QuPath's ImageJ-friendly Watershed class (not the general Watershed class for SimpleImage inputs)
+    double minIntensity = 0
+    boolean conn8 = true
+    Watershed.doWatershed(ip, ipLabels, minIntensity, conn8)
+    
+    // Create annotation objects from label image
+    def roiFibreList = RoiLabeling.labelsToFilledRoiList(ipLabels, conn8)
+    
+    // Convert ImageJ ROIs to QuPath ROIs
+    ImagePlane plane = ImagePlane.getDefaultPlane()
+    Calibration cal = imp.getCalibration()
+    
+    // Convert ImageJ ROIs to QuPath annotations
+    def pathFibreObjects = roiFibreList.collect { roiIJ ->
+        def roi = IJTools.convertToROI(roiIJ, cal, downsample, plane);
+        def annotation = PathObjects.createAnnotationObject(roi, getPathClass(className))
+        return annotation
+    }
+    addObjects(pathFibreObjects)
+}
+
+// Get an ImageJ representation of the output
+ImagePlus impOutput
+
+// Use a selected annotation if we have one, otherwise request pixels for the full image
+def selectedObject = getSelectedObject()
+RegionRequest request
+def server = imageData.getServer()
+if (selectedObject != null && selectedObject.isAnnotation())
+    request = RegionRequest.createInstance(server.getPath(), downsample, selectedObject.getROI())
+else
+    request = RegionRequest.createInstance(server, downsample)
+
+ImagePlus imp = IJTools.convertToImagePlus(server, request).getImage()
+
+// Get the statistics of the image to get the minimum and maximum pixel values
+ImageStatistics stats = imp.getStatistics()
+double min = stats.min
+double max = stats.max
+double difference = max - min
+
+// Apply prediction
+try (def dnn = DjlTools.createDnnModel(uri, layout, inputShape as int[])) {
+    def op = ImageOps.buildImageDataOp()
+        .appendOps(
+                ImageOps.Core.ensureType(PixelType.FLOAT32),
+                //ImageOps.Normalize.percentile(0.1, 99.9),
+                ImageOps.Core.subtract(min),
+                ImageOps.Core.divide(difference),
+                ImageOps.ML.dnn(dnn, inputWidth, inputHeight, padding)
+        )
+
+    // Run the prediction, getting an OpenCV Mat as output
+    def mat = op.apply(imageData, request)
+
+    // Convert to an ImageJ ImagePlus
+    impOutput = OpenCVTools.matToImagePlus("Prediction", mat)
+    mat.close()
+}
+
+//impOutput.show()
+
+processImage(impOutput, "Fibre", 2, min_threshold, max_threshold, downsample, imageData, request)
+processImage(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, imageData, request)
