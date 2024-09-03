@@ -47,7 +47,7 @@ double min_threshold = 0.7
 double max_threshold = 1
 
 
-void processImage(ImagePlus imp, String className, int channel, double min_threshold, double max_threshold, double downsample, imageData, request) {
+void processImage(ImagePlus imp, String className, int channel, double min_threshold, double max_threshold, double downsample, imageData, request, double translateX, double translateY) {
     // Create ROIs from thresholds
     imp.setC(channel) // Set the channel index (1-based)
     ImageProcessor ip = imp.getProcessor() // Get the ImageProcessor of the specified channel
@@ -110,7 +110,7 @@ void processImage(ImagePlus imp, String className, int channel, double min_thres
     // Convert ImageJ ROIs to QuPath annotations
     def pathDetectedObjects = roiDetected.collect { roiIJ ->
         def roi = IJTools.convertToROI(roiIJ, cal, downsample, plane);
-        def annotation = PathObjects.createAnnotationObject(roi, getPathClass(className))
+        def annotation = PathObjects.createAnnotationObject(roi.translate(translateX, translateY), getPathClass(className))
         return annotation
     }
     addObjects(pathDetectedObjects)
@@ -120,13 +120,20 @@ void processImage(ImagePlus imp, String className, int channel, double min_thres
 ImagePlus impOutput
 
 // Use a selected annotation if we have one, otherwise request pixels for the full image
+double translateX = 0.0
+double translateY = 0.0
+
 def selectedObject = getSelectedObject()
 RegionRequest request
 def server = imageData.getServer()
-if (selectedObject != null && selectedObject.isAnnotation())
-    request = RegionRequest.createInstance(server.getPath(), downsample, selectedObject.getROI())
-else
+if (selectedObject != null && selectedObject.isAnnotation()) {
+    def roi = selectedObject.getROI()
+    translateX = roi.getBoundsX()
+    translateY = roi.getBoundsY()
+    request = RegionRequest.createInstance(server.getPath(), downsample, roi)
+} else {
     request = RegionRequest.createInstance(server, downsample)
+}
 
 ImagePlus imp = IJTools.convertToImagePlus(server, request).getImage()
 
@@ -157,5 +164,5 @@ try (def dnn = DjlTools.createDnnModel(uri, layout, inputShape as int[])) {
 
 //impOutput.show()
 
-processImage(impOutput, "Fibre", 2, min_threshold, max_threshold, downsample, imageData, request)
-processImage(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, imageData, request)
+processImage(impOutput, "Fibre", 2, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
+processImage(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
