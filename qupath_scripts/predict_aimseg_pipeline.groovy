@@ -42,7 +42,7 @@ int nChannels = 1
 def padding = Padding.symmetric(32)
 def layout = "NCHW"
 def inputShape = [1, nChannels, inputHeight, inputWidth]
-double downsample = 4.0
+double downsample = 2.0
 double min_threshold = 0.7
 double max_threshold = 1
 
@@ -62,13 +62,17 @@ void processImage(ImagePlus imp, String className, int channel, double min_thres
     addObjects(pathObjects)
     
     // Create an ImageServer for seed instances
-    def minSize = 100
+    def minSizePixels = 2000
+    // Get the pixel size in microns (assuming x and y pixel sizes are the same)
+    //def pixelSizeMicrons = imageData.getServer().getPixelCalibration().getPixelWidth()
+    //def minSizeMicrons = minSizePixels * Math.pow(pixelSizeMicrons, 2) // Calculate the minimum size in microns^2
+    
     def seedServer = new LabeledImageServer.Builder(imageData)
             .backgroundLabel(0, ColorTools.BLACK) // Specify background label (usually 0 or 255)
             .downsample(downsample)    // Choose server resolution; this should match the resolution at which tiles are exported
             .useAnnotations()
             .useInstanceLabels()
-            .useFilter(p -> p.isAnnotation() && p.getPathClass() == getPathClass('Seed') && p.getROI().getArea() > minSize)
+            .useFilter(p -> p.isAnnotation() && p.getPathClass() == getPathClass('Seed') && p.getROI().getArea() > minSizePixels)
             .multichannelOutput(false) // If true, each label refers to the channel of a multichannel binary image (required for multiclass probability)
             .build()
     
@@ -97,19 +101,19 @@ void processImage(ImagePlus imp, String className, int channel, double min_thres
     Watershed.doWatershed(ip, ipLabels, minIntensity, conn8)
     
     // Create annotation objects from label image
-    def roiFibreList = RoiLabeling.labelsToFilledRoiList(ipLabels, conn8)
+    def roiDetected = RoiLabeling.labelsToFilledRoiList(ipLabels, conn8)
     
     // Convert ImageJ ROIs to QuPath ROIs
     ImagePlane plane = ImagePlane.getDefaultPlane()
     Calibration cal = imp.getCalibration()
     
     // Convert ImageJ ROIs to QuPath annotations
-    def pathFibreObjects = roiFibreList.collect { roiIJ ->
+    def pathDetectedObjects = roiDetected.collect { roiIJ ->
         def roi = IJTools.convertToROI(roiIJ, cal, downsample, plane);
         def annotation = PathObjects.createAnnotationObject(roi, getPathClass(className))
         return annotation
     }
-    addObjects(pathFibreObjects)
+    addObjects(pathDetectedObjects)
 }
 
 // Get an ImageJ representation of the output
