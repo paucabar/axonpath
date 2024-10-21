@@ -29,6 +29,12 @@ import qupath.lib.objects.PathObjects
 
 import java.nio.file.Paths
 
+import ij.IJ
+import ij.plugin.filter.ParticleAnalyzer
+import ij.measure.ResultsTable
+import ij.plugin.frame.RoiManager
+import ij.measure.Measurements
+
 import static qupath.lib.gui.scripting.QPEx.*
 import qupath.ext.djl.DjlTools
 
@@ -47,7 +53,28 @@ double min_threshold = 0.7
 double max_threshold = 1
 
 
-void processImage(ImagePlus imp, String className, int channel, double min_threshold, double max_threshold, double downsample, imageData, request, double translateX, double translateY) {
+/**
+ * Implements ImageJ's Particle Analyzer
+ * The method will always return an ImagePlus
+ * options is defined as an integer using ParticleAnalyzer fields
+ * options is defined as an integer using Interface Measurements fields
+ * results table is not given as an argument because the method is never used to measure
+ */
+ImagePlus analyzeParticles (ImagePlus imp, int options, int measurements, double minSize, double maxSize, double minCirc, double maxCirc) {
+    def rt = new ResultsTable()
+    def pa = new ParticleAnalyzer(options, measurements, rt, minSize, maxSize, minCirc, maxCirc)
+    ImageProcessor ip = imp.getProcessor()
+    ip.setBinaryThreshold()
+    pa.setHideOutputImage(true)
+    pa.analyze(imp, ip)
+    ImagePlus impOutput = pa.getOutputImage()
+    if (impOutput.isInvertedLut()) {
+        IJ.run(impOutput, "Grays", "") // get the non-inverted LUT
+    }
+    return impOutput
+}
+
+void processSDT(ImagePlus imp, String className, int channel, double min_threshold, double max_threshold, double downsample, imageData, request, double translateX, double translateY) {
     // Create ROIs from thresholds
     imp.setC(channel) // Set the channel index (1-based)
     ImageProcessor ip = imp.getProcessor() // Get the ImageProcessor of the specified channel
@@ -77,7 +104,7 @@ void processImage(ImagePlus imp, String className, int channel, double min_thres
             .build()
     
     // Uncomment if you want to export the label image
-    def name = GeneralTools.stripExtension(imageData.getServer().getMetadata().getName()) // get image name to export annotations
+    //def name = GeneralTools.stripExtension(imageData.getServer().getMetadata().getName()) // get image name to export annotations
     //def pathLabel = buildFilePath(labelDir, name + ".tif") // Define instance output file paths
     //writeImage(seedServer, pathLabel) // write the image
     
@@ -111,6 +138,34 @@ void processImage(ImagePlus imp, String className, int channel, double min_thres
     def pathDetectedObjects = roiDetected.collect { roiIJ ->
         def roi = IJTools.convertToROI(roiIJ, cal, downsample, plane);
         def annotation = PathObjects.createAnnotationObject(roi.translate(translateX, translateY), getPathClass(className))
+        return annotation
+    }
+    addObjects(pathDetectedObjects)
+}
+
+void processSemantic(ImagePlus imp, String className, int channel, int label, double downsample, imageData, request, double translateX, double translateY) {
+    // Create ROIs from thresholds
+    imp.setC(channel) // Set the channel index (1-based)
+    ImageProcessor ip = imp.getProcessor() // Get the ImageProcessor of the specified channel
+    ip.setThreshold(label, label, ImageProcessor.NO_LUT_UPDATE)
+    ImageProcessor ip_mask = ip.createMask() // image processor
+    ImagePlus imp_mask = new ImagePlus("Binary Mask", ip_mask) // image processor to image plus
+
+    int options_add_manager = ParticleAnalyzer.SHOW_MASKS + ParticleAnalyzer.ADD_TO_MANAGER + ParticleAnalyzer.COMPOSITE_ROIS
+    int measurements_area = Measurements.AREA
+    ImagePlus binaryMask = analyzeParticles(imp_mask, options_add_manager, measurements_area, 0, Double.POSITIVE_INFINITY, 0, 1)
+    RoiManager rm = RoiManager.getInstance()
+    rm.setVisible(false)
+    def roiList = rm.getRoisAsArray()
+    rm.close()
+
+    // Convert ImageJ ROIs to QuPath annotations
+    ImagePlane plane = ImagePlane.getDefaultPlane()
+    Calibration cal = imp.getCalibration()
+    
+    def pathDetectedObjects = roiList.collect { roi ->
+        def roiIJ = IJTools.convertToROI(roi, cal, downsample, plane)
+        def annotation = PathObjects.createAnnotationObject(roiIJ.translate(translateX, translateY), getPathClass(className))
         return annotation
     }
     addObjects(pathDetectedObjects)
@@ -164,5 +219,6 @@ try (def dnn = DjlTools.createDnnModel(uri, layout, inputShape as int[])) {
 
 //impOutput.show()
 
-processImage(impOutput, "Fibre", 2, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
-processImage(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
+processSDT(impOutput, "Fibre", 2, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
+processSDT(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
+processSemantic(impOutput, "Inner Tongue", 1, 2, downsample, imageData, request, translateX, translateY)
