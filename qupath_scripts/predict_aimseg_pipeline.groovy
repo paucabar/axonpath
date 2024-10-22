@@ -37,6 +37,7 @@ import ij.measure.Measurements
 
 import org.locationtech.jts.geom.Geometry
 import qupath.lib.objects.hierarchy.PathObjectHierarchy
+import qupath.lib.objects.PathObject
 
 import static qupath.lib.gui.scripting.QPEx.*
 import qupath.ext.djl.DjlTools
@@ -174,7 +175,8 @@ void processSemantic(ImagePlus imp, String className, int channel, int label, do
     addObjects(pathDetectedObjects)
 }
 
-// Method to compute the IoU between 2 object classes and create hierarchical relationships
+// Method to compute the intersecion over object2 area (IoO2A) between 2 object classes and create hierarchical relationships
+// If IoO2A is ggreater than 0.9, object 2 will be added below object1 in the hierarchy
 
 def assessIoO2A (objects1, objects2) {
     // fill intersection over prediction
@@ -199,6 +201,17 @@ def assessIoO2A (objects1, objects2) {
         }
     }
 }
+
+// Method to identify all the objects with no parent object
+
+def findParentless (objects) {
+    println "Checking ${objects.size()} objects"
+    def parentless = objects.findAll { it.getLevel() == 1 } // level 1 because image is the 'root'
+    println "Found ${parentless.size()} parentless objects"
+    return parentless
+}
+
+// Method
 
 // Get an ImageJ representation of the output
 ImagePlus impOutput
@@ -248,16 +261,23 @@ try (def dnn = DjlTools.createDnnModel(uri, layout, inputShape as int[])) {
 
 //impOutput.show()
 
+// Instance segmentation on model prediction
 processSDT(impOutput, "Fibre", 2, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
 processSDT(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
 processSemantic(impOutput, "Inner Tongue", 1, 2, downsample, imageData, request, translateX, translateY)
 
+// Establish hierarchy
 def fibre_objects = getAnnotationObjects().findAll{(it.getPathClass() == getPathClass("Fibre")) }
 def axon_objects = getAnnotationObjects().findAll{(it.getPathClass() == getPathClass("Axon")) }
 def inner_tongue_objects = getAnnotationObjects().findAll {it.getPathClass() == getPathClass("Inner Tongue")}
 
-println "Comparing ${fibre_objects.size()} objects vs ${inner_tongue_objects.size()} objects"
+println "Comparing ${fibre_objects.size()} fibre objects vs ${inner_tongue_objects.size()} inner tongue objects"
 assessIoO2A (fibre_objects, inner_tongue_objects)
 
-println "Comparing ${fibre_objects.size()} objects vs ${axon_objects.size()} objects"
-assessIoO2A (fibre_objects, axon_objects)
+println "Comparing ${inner_tongue_objects.size()} inner tongue objects vs ${axon_objects.size()} axon objects"
+assessIoO2A (inner_tongue_objects, axon_objects)
+
+// Remove parentless pbjects
+def combined_objects = axon_objects + inner_tongue_objects
+parentless = findParentless (combined_objects)
+removeObjects (parentless, false) // true to keep children objects
