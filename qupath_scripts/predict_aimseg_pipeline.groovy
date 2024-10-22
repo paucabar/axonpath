@@ -35,6 +35,9 @@ import ij.measure.ResultsTable
 import ij.plugin.frame.RoiManager
 import ij.measure.Measurements
 
+import org.locationtech.jts.geom.Geometry
+import qupath.lib.objects.hierarchy.PathObjectHierarchy
+
 import static qupath.lib.gui.scripting.QPEx.*
 import qupath.ext.djl.DjlTools
 
@@ -171,6 +174,32 @@ void processSemantic(ImagePlus imp, String className, int channel, int label, do
     addObjects(pathDetectedObjects)
 }
 
+// Method to compute the IoU between 2 object classes and create hierarchical relationships
+
+def assessIoO2A (objects1, objects2) {
+    // fill intersection over prediction
+    def POH = new PathObjectHierarchy()
+    objects1.eachWithIndex { target, index_y ->
+        Geometry g1 = target.getROI().getGeometry()
+        objects2.eachWithIndex { prediction, index_x ->
+            Geometry g2 = prediction.getROI().getGeometry()
+            float intersection = g1.intersection(g2).getArea()
+            if (intersection > 0) {
+                def target_area = g1.getArea()
+                def prediction_area = g2.getArea()
+                float union = target_area + prediction_area - intersection
+                //float iou = intersection / union
+                float iop = intersection / prediction_area
+                
+                // add object2 below object1 if the intersection over the object2 area is close to 1
+                if (iop > 0.9) {
+                    POH.addObjectBelowParent(target, prediction, true ) // true to fireUpdate
+                }
+            }
+        }
+    }
+}
+
 // Get an ImageJ representation of the output
 ImagePlus impOutput
 
@@ -222,3 +251,13 @@ try (def dnn = DjlTools.createDnnModel(uri, layout, inputShape as int[])) {
 processSDT(impOutput, "Fibre", 2, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
 processSDT(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
 processSemantic(impOutput, "Inner Tongue", 1, 2, downsample, imageData, request, translateX, translateY)
+
+def fibre_objects = getAnnotationObjects().findAll{(it.getPathClass() == getPathClass("Fibre")) }
+def axon_objects = getAnnotationObjects().findAll{(it.getPathClass() == getPathClass("Axon")) }
+def inner_tongue_objects = getAnnotationObjects().findAll {it.getPathClass() == getPathClass("Inner Tongue")}
+
+println "Comparing ${fibre_objects.size()} objects vs ${inner_tongue_objects.size()} objects"
+assessIoO2A (fibre_objects, inner_tongue_objects)
+
+println "Comparing ${fibre_objects.size()} objects vs ${axon_objects.size()} objects"
+assessIoO2A (fibre_objects, axon_objects)
