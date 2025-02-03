@@ -1,5 +1,5 @@
 /**
- * This script demonstrates how to run a model using DJL in QuPath.
+ * This script demonstrates how to run an AimSeg model using DJL in QuPath.
  *
  * You should first install the DJL extension in QuPath, and download PyTorch -
  * see https://qupath.readthedocs.io/en/stable/docs/deep/djl.html
@@ -42,20 +42,10 @@ import qupath.lib.objects.PathObject
 import static qupath.lib.gui.scripting.QPEx.*
 import qupath.ext.djl.DjlTools
 
-def modelPath = "D:/pcarrillo/Git_Repos/AimSeg-Monai_3Targets/data_evaluation/lee_alpha_03_01_3targets_bigmodel/weights.pt"
-def uri = Paths.get(modelPath).toUri()
-def imageData = getCurrentImageData()
 
-int inputWidth = 512
-int inputHeight = inputWidth
-int nChannels = 1
-def padding = Padding.symmetric(32)
-def layout = "NCHW"
-def inputShape = [1, nChannels, inputHeight, inputWidth]
-double downsample = 2.0
-double min_threshold = 0.7
-double max_threshold = 1
-
+/**
+ * Define some methods
+ */
 
 /**
  * Implements ImageJ's Particle Analyzer
@@ -78,6 +68,10 @@ ImagePlus analyzeParticles (ImagePlus imp, int options, int measurements, double
     return impOutput
 }
 
+/**
+ * Method to get an SDT channel from an image plus and return an instance segmentation in the
+ * form of QuPath objects.
+ */
 void processSDT(ImagePlus imp, String className, int channel, double min_threshold, double max_threshold, double downsample, imageData, request, double translateX, double translateY) {
     // Create ROIs from thresholds
     imp.setC(channel) // Set the channel index (1-based)
@@ -93,10 +87,7 @@ void processSDT(ImagePlus imp, String className, int channel, double min_thresho
     addObjects(pathObjects)
     
     // Create an ImageServer for seed instances
-    def minSizePixels = 2000
-    // Get the pixel size in microns (assuming x and y pixel sizes are the same)
-    //def pixelSizeMicrons = imageData.getServer().getPixelCalibration().getPixelWidth()
-    //def minSizeMicrons = minSizePixels * Math.pow(pixelSizeMicrons, 2) // Calculate the minimum size in microns^2
+    def minSizePixels = 700
     
     def seedServer = new LabeledImageServer.Builder(imageData)
             .backgroundLabel(0, ColorTools.BLACK) // Specify background label (usually 0 or 255)
@@ -147,6 +138,10 @@ void processSDT(ImagePlus imp, String className, int channel, double min_thresho
     addObjects(pathDetectedObjects)
 }
 
+/**
+ * Method to get a semantic channel from an image plus and return an instance segmentation in the
+ * form of QuPath objects.
+ */
 void processSemantic(ImagePlus imp, String className, int channel, int label, double downsample, imageData, request, double translateX, double translateY) {
     // Create ROIs from thresholds
     imp.setC(channel) // Set the channel index (1-based)
@@ -175,32 +170,51 @@ void processSemantic(ImagePlus imp, String className, int channel, int label, do
     addObjects(pathDetectedObjects)
 }
 
-// Method to compute the intersecion over object2 area (IoO2A) between 2 object classes and create hierarchical relationships
-// If IoO2A is ggreater than 0.9, object 2 will be added below object1 in the hierarchy
+// Method to compute the intersection over Object2 area (IoO2A) between two object classes 
+// and create hierarchical relationships
+// If IoO2A == 1, Object2 is added below Object1 immediately
+// If 0.9 < IoO2A < 1, Object2 is replaced by the intersection before being added below Object1
 
-def assessIoO2A (objects1, objects2) {
-    // fill intersection over prediction
-    def POH = new PathObjectHierarchy()
-    objects1.eachWithIndex { target, index_y ->
-        Geometry g1 = target.getROI().getGeometry()
-        objects2.eachWithIndex { prediction, index_x ->
-            Geometry g2 = prediction.getROI().getGeometry()
-            float intersection = g1.intersection(g2).getArea()
-            if (intersection > 0) {
-                def target_area = g1.getArea()
-                def prediction_area = g2.getArea()
-                float union = target_area + prediction_area - intersection
-                //float iou = intersection / union
-                float iop = intersection / prediction_area
+def establishHierarchyBasedOnIoO2(objectsPrimary, objectsSecondary) {
+    // Initialise the PathObjectHierarchy
+    def pathHierarchy = new PathObjectHierarchy()
+
+    objectsPrimary.eachWithIndex { parentObject, indexPrimary ->
+        Geometry parentGeometry = parentObject.getROI().getGeometry()
+        
+        objectsSecondary.eachWithIndex { secondaryObject, indexSecondary ->
+            Geometry secondaryGeometry = secondaryObject.getROI().getGeometry()
+            float intersectionArea = parentGeometry.intersection(secondaryGeometry).getArea()
+            
+            if (intersectionArea > 0) {
+                def parentArea = parentGeometry.getArea()
+                def secondaryArea = secondaryGeometry.getArea()
+                float ioo2 = intersectionArea / secondaryArea
                 
-                // add object2 below object1 if the intersection over the object2 area is close to 1
-                if (iop > 0.9) {
-                    POH.addObjectBelowParent(target, prediction, true ) // true to fireUpdate
+                // Establish hierarchy directly if IoO2 == 1
+                if (ioo2 == 1) {
+                    pathHierarchy.addObjectBelowParent(parentObject, secondaryObject, true)
+                }
+                // Replace secondary object with intersection and establish hierarchy if 0.9 < IoO2 < 1
+                else if (ioo2 > 0.9) {
+                    def intersectionGeometry = parentGeometry.intersection(secondaryGeometry)
+                    def intersectionROI = GeometryTools.geometryToROI(intersectionGeometry, secondaryObject.getROI().getImagePlane())
+                    
+                    // Create the intersection object as an annotation with the same PathClass
+                    def intersectionObject = PathObjects.createAnnotationObject(intersectionROI, secondaryObject.getPathClass())
+                    
+                    // Replace the secondary object with the intersection object
+                    pathHierarchy.removeObject(secondaryObject, true) // Remove the original object
+                    pathHierarchy.addObject(intersectionObject, false) // Add the intersection object
+                    
+                    // Establish the hierarchy
+                    pathHierarchy.addObjectBelowParent(parentObject, intersectionObject, true)
                 }
             }
         }
     }
 }
+
 
 // Method to identify all the objects with no parent object
 
@@ -211,7 +225,31 @@ def findParentless (objects) {
     return parentless
 }
 
-// Method
+/**
+ * Segmentation pipeline
+ */
+
+//Some parameters
+
+// Model file
+def modelPath = "D:/pcarrillo/Git_Repos/AimSeg-Monai_3Targets/weights/weights_tem.pt"
+def uri = Paths.get(modelPath).toUri()
+
+// Image data
+def imageData = getCurrentImageData()
+
+// Model parameters
+int inputWidth = 512
+int inputHeight = inputWidth
+int nChannels = 1
+def padding = Padding.symmetric(32)
+def layout = "NCHW"
+def inputShape = [1, nChannels, inputHeight, inputWidth]
+
+// Post-processing parameters
+double downsample = 2.0
+double min_threshold = 0.7
+double max_threshold = 1
 
 // Get an ImageJ representation of the output
 ImagePlus impOutput
@@ -267,15 +305,17 @@ processSDT(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, image
 processSemantic(impOutput, "Inner Tongue", 1, 2, downsample, imageData, request, translateX, translateY)
 
 // Establish hierarchy
+
+// Get objects by class
 def fibre_objects = getAnnotationObjects().findAll{(it.getPathClass() == getPathClass("Fibre")) }
 def axon_objects = getAnnotationObjects().findAll{(it.getPathClass() == getPathClass("Axon")) }
 def inner_tongue_objects = getAnnotationObjects().findAll {it.getPathClass() == getPathClass("Inner Tongue")}
 
 println "Comparing ${fibre_objects.size()} fibre objects vs ${inner_tongue_objects.size()} inner tongue objects"
-assessIoO2A (fibre_objects, inner_tongue_objects)
+establishHierarchyBasedOnIoO2 (fibre_objects, inner_tongue_objects)
 
 println "Comparing ${inner_tongue_objects.size()} inner tongue objects vs ${axon_objects.size()} axon objects"
-assessIoO2A (inner_tongue_objects, axon_objects)
+establishHierarchyBasedOnIoO2 (inner_tongue_objects, axon_objects)
 
 // Remove parentless pbjects
 def combined_objects = axon_objects + inner_tongue_objects
