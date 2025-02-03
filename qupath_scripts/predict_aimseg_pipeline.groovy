@@ -5,6 +5,11 @@
  * see https://qupath.readthedocs.io/en/stable/docs/deep/djl.html
  */
 
+
+/**
+ * Some imports
+ */
+ 
 import ij.ImagePlus
 import ij.process.ImageStatistics
 import qupath.lib.images.servers.PixelType
@@ -48,6 +53,33 @@ import qupath.ext.djl.DjlTools
  */
 
 /**
+ * Function to calculate the downsample factor based on target pixel size
+ */
+double calculateDownsampleFactor(imageData, double targetPixelSizeMicrons, boolean allowUpscaling = false) {
+    // Get the current pixel size from image metadata
+    def pixelSizeMicrons = imageData.getServer().getPixelCalibration().getAveragedPixelSizeMicrons()
+    
+    if (pixelSizeMicrons == null) {
+        throw new IllegalArgumentException("Pixel size could not be determined from the image metadata.")
+    }
+    
+    // Calculate the downsample factor
+    def downsampleFactor =  targetPixelSizeMicrons / pixelSizeMicrons
+    
+    // Handle upscaling based on the user's preference
+    if (!allowUpscaling && downsampleFactor < 1) {
+        throw new IllegalArgumentException("Target pixel size is smaller than the current pixel size. Upscaling is disabled.")
+    }
+
+    // Ensure the downsample factor is at least 1 if upscaling is not allowed
+    if (!allowUpscaling) {
+        downsampleFactor = Math.max(downsampleFactor, 1)
+    }
+
+    return downsampleFactor.round(1)
+}
+
+/**
  * Implements ImageJ's Particle Analyzer
  * The method will always return an ImagePlus
  * options is defined as an integer using ParticleAnalyzer fields
@@ -72,7 +104,7 @@ ImagePlus analyzeParticles (ImagePlus imp, int options, int measurements, double
  * Method to get an SDT channel from an image plus and return an instance segmentation in the
  * form of QuPath objects.
  */
-void processSDT(ImagePlus imp, String className, int channel, double min_threshold, double max_threshold, double downsample, imageData, request, double translateX, double translateY) {
+void processSDT(ImagePlus imp, String className, int channel, double min_threshold, double max_threshold, double downsample, imageData, request, double translateX = 0, double translateY = 0) {
     // Create ROIs from thresholds
     imp.setC(channel) // Set the channel index (1-based)
     ImageProcessor ip = imp.getProcessor() // Get the ImageProcessor of the specified channel
@@ -225,6 +257,9 @@ def findParentless (objects) {
     return parentless
 }
 
+
+
+
 /**
  * Segmentation pipeline
  */
@@ -232,7 +267,7 @@ def findParentless (objects) {
 //Some parameters
 
 // Model file
-def modelPath = "D:/pcarrillo/Git_Repos/AimSeg-Monai_3Targets/weights/weights_tem.pt"
+def modelPath = "D:/pcarrillo/Git_Repos/AimSeg-Monai_3Targets/weights/weights_tem.pt" // the path to your model here
 def uri = Paths.get(modelPath).toUri()
 
 // Image data
@@ -247,7 +282,9 @@ def layout = "NCHW"
 def inputShape = [1, nChannels, inputHeight, inputWidth]
 
 // Post-processing parameters
-double downsample = 2.0
+double targetPixelSizeMicrons = 0.008 // optimised pixel size for electron microscopy
+double downsample = calculateDownsampleFactor(imageData, targetPixelSizeMicrons, true)
+println downsample
 double min_threshold = 0.7
 double max_threshold = 1
 
