@@ -1,9 +1,18 @@
 /**
- * This script demonstrates how to run an AimSeg model using DJL in QuPath.
+ * This script demonstrates how to run an AimSeg model in QuPath,
+ * including the basic functions for model inference and post-processing in QuPath.
+ * The output is stored as three distinct classes of segmented objects: axon, inner tongue, and fibre.
+ * 
+ * The script establishes meaningful hierarchies, recognising that a fibre can contain multiple
+ * inner tongue objects, and an inner tongue object may contain multiple axon objects.
  *
- * You should first install the DJL extension in QuPath, and download PyTorch -
- * see https://qupath.readthedocs.io/en/stable/docs/deep/djl.html
+ * Prior to running this script, ensure that the DJL extension is installed in QuPath 
+ * and PyTorch has been downloaded – see https://qupath.readthedocs.io/en/stable/docs/deep/djl.html
  */
+ 
+ /*
+  * TODO: currently the script works with annotation objects, but it should use detection objects
+  */ 
 
 
 /**
@@ -77,6 +86,42 @@ double calculateDownsampleFactor(imageData, double targetPixelSizeMicrons, boole
     }
 
     return downsampleFactor.round(1)
+}
+
+/**
+ * This function runs an AimSeg model using DJL in QuPath
+ */
+ImagePlus modelInference (uri, layout, inputWidth, inputHeight, padding, inputShape, imageData, server, request) {
+    ImagePlus imp = IJTools.convertToImagePlus(server, request).getImage()
+    
+    // Get the statistics of the image to get the minimum and maximum pixel values
+    ImageStatistics stats = imp.getStatistics()
+    double min = stats.min
+    double max = stats.max
+    double difference = max - min
+    
+    // Apply prediction
+    try (def dnn = DjlTools.createDnnModel(uri, layout, inputShape as int[])) {
+        def op = ImageOps.buildImageDataOp()
+            .appendOps(
+                    ImageOps.Core.ensureType(PixelType.FLOAT32),
+                    //ImageOps.Normalize.percentile(0.1, 99.9),
+                    ImageOps.Core.subtract(min),
+                    ImageOps.Core.divide(difference),
+                    ImageOps.ML.dnn(dnn, inputWidth, inputHeight, padding)
+            )
+    
+        // Run the prediction, getting an OpenCV Mat as output
+        def mat = op.apply(imageData, request)
+    
+        // Convert to an ImageJ ImagePlus
+        impOutput = OpenCVTools.matToImagePlus("Prediction", mat)
+        mat.close()
+    }
+    
+    //impOutput.show()
+    
+    return impOutput
 }
 
 /**
@@ -247,7 +292,6 @@ def establishHierarchyBasedOnIoO2(objectsPrimary, objectsSecondary) {
     }
 }
 
-
 // Method to identify all the objects with no parent object
 
 def findParentless (objects) {
@@ -281,10 +325,11 @@ def padding = Padding.symmetric(32)
 def layout = "NCHW"
 def inputShape = [1, nChannels, inputHeight, inputWidth]
 
-// Post-processing parameters
-double targetPixelSizeMicrons = 0.008 // optimised pixel size for electron microscopy
+// Image parameters
+double targetPixelSizeMicrons = 0.008 // optimised pixel size for electron microscopy, 0.07 microns for brightfield images
 double downsample = calculateDownsampleFactor(imageData, targetPixelSizeMicrons, true)
-println downsample
+
+// Post-processing parameters
 double min_threshold = 0.7
 double max_threshold = 1
 
@@ -307,34 +352,8 @@ if (selectedObject != null && selectedObject.isAnnotation()) {
     request = RegionRequest.createInstance(server, downsample)
 }
 
-ImagePlus imp = IJTools.convertToImagePlus(server, request).getImage()
-
-// Get the statistics of the image to get the minimum and maximum pixel values
-ImageStatistics stats = imp.getStatistics()
-double min = stats.min
-double max = stats.max
-double difference = max - min
-
-// Apply prediction
-try (def dnn = DjlTools.createDnnModel(uri, layout, inputShape as int[])) {
-    def op = ImageOps.buildImageDataOp()
-        .appendOps(
-                ImageOps.Core.ensureType(PixelType.FLOAT32),
-                //ImageOps.Normalize.percentile(0.1, 99.9),
-                ImageOps.Core.subtract(min),
-                ImageOps.Core.divide(difference),
-                ImageOps.ML.dnn(dnn, inputWidth, inputHeight, padding)
-        )
-
-    // Run the prediction, getting an OpenCV Mat as output
-    def mat = op.apply(imageData, request)
-
-    // Convert to an ImageJ ImagePlus
-    impOutput = OpenCVTools.matToImagePlus("Prediction", mat)
-    mat.close()
-}
-
-//impOutput.show()
+// Run model on the specified image region
+impOutput = modelInference (uri, layout, inputWidth, inputHeight, padding, inputShape, imageData, server, request)
 
 // Instance segmentation on model prediction
 processSDT(impOutput, "Fibre", 2, min_threshold, max_threshold, downsample, imageData, request, translateX, translateY)
@@ -342,8 +361,6 @@ processSDT(impOutput, "Axon", 3, min_threshold, max_threshold, downsample, image
 processSemantic(impOutput, "Inner Tongue", 1, 2, downsample, imageData, request, translateX, translateY)
 
 // Establish hierarchy
-
-// Get objects by class
 def fibre_objects = getAnnotationObjects().findAll{(it.getPathClass() == getPathClass("Fibre")) }
 def axon_objects = getAnnotationObjects().findAll{(it.getPathClass() == getPathClass("Axon")) }
 def inner_tongue_objects = getAnnotationObjects().findAll {it.getPathClass() == getPathClass("Inner Tongue")}
@@ -358,3 +375,5 @@ establishHierarchyBasedOnIoO2 (inner_tongue_objects, axon_objects)
 def combined_objects = axon_objects + inner_tongue_objects
 parentless = findParentless (combined_objects)
 removeObjects (parentless, false) // true to keep children objects
+
+return
