@@ -71,6 +71,18 @@ Collection<PathObject> removeChildless() {
     return invalidFibreObjects
 }
 
+/**
+ * This function calculates myelin metrics from QuPath objects organised in a hierarchical structure. 
+ * The assumed hierarchy is as follows: Fibre > Inner Tongue > Axon. 
+ * This means that each Fibre object contains one or more Inner Tongue objects, 
+ * and each Inner Tongue object contains one or more Axon objects.
+ * 
+ * The function sums the areas of all Axon and Inner Tongue objects within a Fibre object 
+ * to produce a single area measurement for each Fibre.
+ * All area calculations take into account the image calibration, specifically the pixel size 
+ * in square microns, ensuring accurate and meaningful results.
+ */
+
 void computeFeatures(imageData) {
     // Get calibration
     def pixelHeightMicrons = imageData.getServer().getPixelCalibration().getPixelHeightMicrons()
@@ -135,6 +147,9 @@ void computeFeatures(imageData) {
         return
     }
 }
+
+
+
 
 /**
  * Quantification pipeline
