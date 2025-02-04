@@ -9,6 +9,15 @@
 
 
 /**
+ * Some imports
+ */
+
+import static qupath.lib.gui.scripting.QPEx.*
+
+import qupath.lib.roi.RoiTools
+import java.lang.Math
+
+/**
  * Define some methods
  */
 
@@ -62,10 +71,82 @@ Collection<PathObject> removeChildless() {
     return invalidFibreObjects
 }
 
+void computeFeatures(imageData) {
+    // Get calibration
+    def pixelHeightMicrons = imageData.getServer().getPixelCalibration().getPixelHeightMicrons()
+    def pixelWidthMicrons = imageData.getServer().getPixelCalibration().getPixelWidthMicrons()
+    
+    // Check if the height and width are the same
+    if (pixelHeightMicrons != pixelWidthMicrons) {
+        throw new IllegalArgumentException("The pixel calibration is not isotropic (Pixel Height: ${pixelHeightMicrons}, Pixel Width: ${pixelWidthMicrons}). This method requires isotropic XY pixels.")
+    }
+    
+    // Use the pixel size (assuming isotropic calibration)
+    def pixelSizeSquaredMicrons = pixelHeightMicrons * pixelWidthMicrons
+    
+    parentAnnotations = getAnnotationObjects().findAll{it.getPathClass() == getPathClass("Fibre")}
+    def roiTools = new RoiTools()
+    
+    parentAnnotations.each { parent ->
+    
+        // define metrics
+        float axon_area = 0
+        float inner_region_area = 0
+        float fibre_area = 0
+        float axon_gratio = 0
+        float myelin_gratio = 0
+        int axon_objects = 0
+        float fibre_circularity = 0
+        float fibre_solidity = 0
+    
+        childAnnotations = parent.getChildObjects()
+        childAnnotations.each { child ->
+            inner_region_area += child.getROI().getArea() * pixelSizeSquaredMicrons
+            grandchildAnnotations = child.getChildObjects()
+            axon_objects = grandchildAnnotations.size()
+            
+            grandchildAnnotations.each { grandchild ->
+                axon_area += grandchild.getROI().getArea() * pixelSizeSquaredMicrons
+            }
+        }
+                
+        // fibre metrics
+        fibre_area = parent.getROI().getArea() * pixelSizeSquaredMicrons
+        fibre_circularity = roiTools.getCircularity(parent.getROI())
+        fibre_solidity = parent.getROI().getSolidity()
+        
+        // g-ratio netrics
+        float fibre_diameter = 2 * Math.sqrt(fibre_area / Math.PI)
+        float inreg_diameter = 2 * Math.sqrt(inner_region_area / Math.PI)
+        float axon_diameter = 2 * Math.sqrt(axon_area / Math.PI)
+        myelin_gratio = inreg_diameter / fibre_diameter
+        axon_gratio = axon_diameter / fibre_diameter
+        
+        // add measurements
+        parent.getMeasurementList().putMeasurement("Axon Area", axon_area)
+        parent.getMeasurementList().putMeasurement("Inner Region Area", inner_region_area)
+        parent.getMeasurementList().putMeasurement("Fibre Area", fibre_area)
+        parent.getMeasurementList().putMeasurement("Axon g-ratio", axon_gratio)
+        parent.getMeasurementList().putMeasurement("Myelin g-ratio", myelin_gratio)
+        parent.getMeasurementList().putMeasurement("Axon Objects", axon_objects)
+        parent.getMeasurementList().putMeasurement("Fibre Circularity", fibre_circularity)
+        parent.getMeasurementList().putMeasurement("Fibre Solidity", fibre_solidity)
+        
+        return
+    }
+}
 
 /**
  * Quantification pipeline
  */
  
+ // get image data
+ def imageData = getCurrentImageData()
+ 
  // Remove objects invalid for quantification
 Collection<PathObject> invalidFibreObjects = removeChildless() // Storing invalid objects, could be useful for semi-automated annotation
+
+// Feature extraction
+computeFeatures(imageData)
+
+return
