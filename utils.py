@@ -15,6 +15,9 @@ import numpy as np
 import torch as t
 import matplotlib.pyplot as plt
 
+from skimage.measure import label
+
+from evaluation2 import SegmentationEvaluator
 from image_processing import (
     postprocessing_distmap,
     postprocessing_distmap_invedge,
@@ -76,15 +79,17 @@ def load_checkpoint(checkpoint, model, optimizer):
     last_epoch = checkpoint['epoch']
     train_loss = checkpoint['train_loss'] 
     val_loss = checkpoint['val_loss']
+    f1_mean = checkpoint['f1_mean']
+    f1_best = checkpoint['best_f1']
     print("Loading checkpoint")
-    return last_epoch, train_loss, val_loss
+    return last_epoch, train_loss, val_loss, f1_mean, f1_best
 
 def model_fn(device):
     model = monai.networks.nets.UNet(
         spatial_dims=2,
         in_channels=1,
         out_channels=5,
-        channels=(16, 32, 64, 128, 256),#(16, 32, 64, 128, 256) or (32, 64, 128, 256, 512)
+        channels=(8, 16, 32, 64, 128),#(16, 32, 64, 128, 256) or (32, 64, 128, 256, 512)
         strides=(2, 2, 2, 2),
         num_res_units=2,
         dropout=0.25,
@@ -148,49 +153,75 @@ def accuracy_fn(sem_pred, sem_targ):
 def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
     model.eval()
     val_loss = []
+    f1_scores_fibre = []
+    f1_scores_axon = []
 
     with torch.no_grad():
         for x, y in loader:
-            # data to device
+            # Move input to device
             x = x.to(device)
-            # predict
+
+            # Predict
             prediction = model(x)
-            # targets to device
+
+            # Prepare target
             y = np.stack(y, axis=1)
             y = torch.tensor(y).to(device=device)
-            # get loss functions
-            val_crossentropy_loss = loss_fn[0](prediction[:, 0:3, :, :], y[:, 1, :, :].long())#.item()
-            val_mse_loss1 = loss_fn[1](prediction[:, 3, :, :], y[:, 2, :, :].float())#.item()
-            val_mse_loss2 = loss_fn[1](prediction[:, 4, :, :], y[:, 3, :, :].float())
-            val_crossentropy_loss = val_crossentropy_loss.float()
-            val_mse_loss1 = val_mse_loss1.float()
-            val_mse_loss2 = val_mse_loss2.float()
-            val_mse_loss = val_mse_loss1 + val_mse_loss2
-            val_loss.append(torch.add(val_crossentropy_loss, val_mse_loss).item())
 
-        val_loss_mean = sum(val_loss)/len(val_loss)
+            # Compute loss
+            val_crossentropy_loss = loss_fn[0](prediction[:, 0:3, :, :], y[:, 2, :, :].long()) # semantic
+            val_mse_loss1 = loss_fn[1](prediction[:, 3, :, :], y[:, 3, :, :].float()) # fibre DT
+            val_mse_loss2 = loss_fn[1](prediction[:, 4, :, :], y[:, 4, :, :].float()) # axon DT
+            val_loss.append((val_crossentropy_loss + val_mse_loss1 + val_mse_loss2).item())
 
-        if (show_results):
-            pred = model(x[0:1])
-            semantic = last_layer_fn(pred[0:1, 0:3, :, :])
-            labels_fibre = postprocessing_sdt(pred[0:1, 3, :, :])
-            labels_axon = postprocessing_sdt(pred[0:1, 4, :, :])
-            print(pred.shape)
+            # F1 Scores
+            for i in range(x.shape[0]):
+                # Predicted instances
+                pred_fibre = postprocessing_sdt(prediction[i:i+1, 3, :, :])
+                pred_axon = postprocessing_sdt(prediction[i:i+1, 4, :, :])
+
+                # Ground truth instances
+                gt_fibre = y[i, 0, :, :].cpu().numpy().astype(np.int32)  # assuming channel 0 is fibre
+                gt_axon = y[i, 1, :, :].cpu().numpy().astype(np.int32)  # assuming channel 1 is axon
+
+                # Evaluate each
+                evaluator_fibre = SegmentationEvaluator(gt_fibre, pred_fibre)
+                evaluator_axon = SegmentationEvaluator(gt_axon, pred_axon)
+
+                f1_fibre = evaluator_fibre.f1_mean(evaluator_fibre.evaluate_multiple_thresholds(f"sample_{i}_fibre"))
+                f1_axon = evaluator_axon.f1_mean(evaluator_axon.evaluate_multiple_thresholds(f"sample_{i}_axon"))
+
+                f1_scores_fibre.append(f1_fibre)
+                f1_scores_axon.append(f1_axon)
+
+        if show_results:
+            semantic = last_layer_fn(prediction[0:1, 0:3, :, :])
+            labels_fibre = postprocessing_sdt(prediction[0:1, 3, :, :])
+            labels_axon = postprocessing_sdt(prediction[0:1, 4, :, :])
             show_images(
-                x[0],
-                y[0, 1, :, :],
-                y[0, 0, :, :],
-                pred[0, 3, :, :],
-                pred[0, 4, :, :],
+                x[0].cpu(),
+                y[0, 0, :, :].cpu(),
+                y[0, 1, :, :].cpu(),
+                y[0, 2, :, :].cpu(),
+                prediction[0, 3, :, :].cpu(),
+                prediction[0, 4, :, :].cpu(),
                 semantic,
                 labels_fibre,
                 labels_axon,
-                titles = ["Image", "Target Semantic", "Target Instance", "Pred Fibre Distance Transform", "Pred Axon Distance Transform", "Prediction Semantic", "Prediction Fibre Instance", "Prediction Axon Instance"],
-                n_cols = 4
-                )
+                titles=[
+                    "Image",  "Target Fibre", "Target Axon",
+                    "Target Semantic", "Pred Fibre SDT", "Pred Axon SDT",
+                    "Prediction Semantic", "Prediction Fibre Instance", "Prediction Axon Instance"
+                ],
+                n_cols=3
+            )
+
     model.train()
-    
-    return val_loss_mean
+
+    val_loss_mean = sum(val_loss) / len(val_loss)
+    f1_mean = (sum(f1_scores_fibre) + sum(f1_scores_axon)) / (len(f1_scores_fibre) + len(f1_scores_axon)) if (f1_scores_fibre and f1_scores_axon) else 0.0
+
+    return val_loss_mean, f1_mean
 
 def loss_plot_fn(train_loss, val_loss):
     # plot train and val loss

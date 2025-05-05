@@ -23,7 +23,7 @@ class AimSegDataset(Dataset):
     
     def _load_image(self, image_path: str):
         image = np.array(Image.open(image_path)).astype(np.float32)
-        image = image[:-1, :-1] # sometimes masks are disconnected from image edges after downampling
+        image = image[:, :] # alternatively use [:-1, :-1] since sometimes masks are disconnected from image edges after downampling
         if (os.path.abspath(image_path).startswith(os.path.abspath(self.image_dir))):
             image = normalize(image) # normalize the raw data
             return image
@@ -34,8 +34,8 @@ class AimSegDataset(Dataset):
             axon_mask = (image == 3).astype(np.uint8)  # Create a binary mask for the original label 3
             axon_labels = label(axon_mask) # Label connected components in the axon mask
             np.putmask(image, image == 3, 2) # Safely merge labels: Convert label 3 to label 2
-            distance_transform, _, _ = LabelDistanceTransforms(axon_labels, 0.3, True, False, True).skeleton_aware_dist_trans() # Calculate the distance transform on the labeled axons
-            return [image, distance_transform] # Return a list containing the semantic mask and the axon distance transform
+            distance_transform, _, _ = LabelDistanceTransforms(axon_labels, 0.1, True, False, True).skeleton_aware_dist_trans() # Calculate the distance transform on the labeled axons
+            return [image, axon_labels, distance_transform] # Return a list containing the semantic mask and the axon distance transform
     
     def _get_image(self, image_path: str):
         image = self._cache.get(image_path)
@@ -66,13 +66,16 @@ class AimSegDataset(Dataset):
         # open semantic mask and axon distance transform
         mask_sem_list = self._get_image(masksem_path)
         mask_sem = mask_sem_list[0]
-        axon_distance_transform = mask_sem_list[1]
+        mask_ins_axon = mask_sem_list[1]
+        mask_ins_axon = fill_labels(mask_ins_axon)
+        axon_distance_transform = mask_sem_list[2]
         # open fibre instance mask and fibre distance transform
         mask_ins_list = self._get_image(maskins_path)
-        mask_ins = mask_ins_list[0]
+        mask_ins_fibre = mask_ins_list[0]
+        mask_ins_fibre = fill_labels(mask_ins_fibre)
         fibre_distance_transform = mask_ins_list[1]
         # masks to list
-        masks = [mask_ins, mask_sem, fibre_distance_transform, axon_distance_transform]
+        masks = [mask_ins_fibre, mask_ins_axon, mask_sem, fibre_distance_transform, axon_distance_transform]
         
         #transforms
         if self.transform is not None:
