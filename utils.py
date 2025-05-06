@@ -276,7 +276,7 @@ def loss_plot_log_fn(train_loss, val_loss):
     fig_loss.set_facecolor('white')
     fig_loss.savefig('loss_plot_log.png', bbox_inches='tight', dpi=300)
 
-def plot_segmentation_scores(f1_fibre, f1_axon, dice_score, balanced_segmentation_score):
+def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmentation_score):
     print("\n----------------------------------------------------------------------------")
     print("Segmentation metric trends over epochs")
 
