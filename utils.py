@@ -1,10 +1,10 @@
-
 import os
 import torch
 import torch.nn as nn
 import torchvision
 from torch.utils.data import DataLoader
 import monai
+from monai.metrics import DiceMetric
 
 from dataset import AimSegDataset
 
@@ -19,11 +19,8 @@ from skimage.measure import label
 
 from evaluation2 import SegmentationEvaluator
 from image_processing import (
-    postprocessing_distmap,
-    postprocessing_distmap_invedge,
-    postprocessing_signed_map,
     postprocessing_sdt,
-    last_layer_fn,
+    last_layer_fn
 )
 
 def show_images(*img_list,binaries=[],titles=[],save_str=False,n_cols=3,axes=False,cmap="plasma",labels=[],dpi=None):
@@ -79,17 +76,20 @@ def load_checkpoint(checkpoint, model, optimizer):
     last_epoch = checkpoint['epoch']
     train_loss = checkpoint['train_loss'] 
     val_loss = checkpoint['val_loss']
-    f1_mean = checkpoint['f1_mean']
-    f1_best = checkpoint['best_f1']
+    f1_fibre = checkpoint['f1_fibre']
+    f1_axon = checkpoint['f1_axon']
+    dice_score = checkpoint['dice_score']
+    score = checkpoint['score']
+    best_score = checkpoint['best_score']
     print("Loading checkpoint")
-    return last_epoch, train_loss, val_loss, f1_mean, f1_best
+    return last_epoch, train_loss, val_loss, f1_fibre, f1_axon, dice_score, score, best_score
 
 def model_fn(device):
     model = monai.networks.nets.UNet(
         spatial_dims=2,
         in_channels=1,
         out_channels=5,
-        channels=(8, 16, 32, 64, 128),#(16, 32, 64, 128, 256) or (32, 64, 128, 256, 512)
+        channels=(8, 16, 32, 64, 128), #(16, 32, 64, 128, 256) or (32, 64, 128, 256, 512)
         strides=(2, 2, 2, 2),
         num_res_units=2,
         dropout=0.25,
@@ -155,6 +155,7 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
     val_loss = []
     f1_scores_fibre = []
     f1_scores_axon = []
+    dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False, num_classes = 3)
 
     with torch.no_grad():
         for x, y in loader:
@@ -173,6 +174,13 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
             val_mse_loss1 = loss_fn[1](prediction[:, 3, :, :], y[:, 3, :, :].float()) # fibre DT
             val_mse_loss2 = loss_fn[1](prediction[:, 4, :, :], y[:, 4, :, :].float()) # axon DT
             val_loss.append((val_crossentropy_loss + val_mse_loss1 + val_mse_loss2).item())
+
+            # Dice Score
+            sem_output = last_layer_fn(prediction[:, 0:3, :, :])
+            y_sem = y[:, 2, :, :]  # only semantic GT
+            y_onehot = nn.functional.one_hot(y_sem.long(), num_classes=3).permute(0, 3, 1, 2).float()
+            pred_onehot = nn.functional.one_hot(sem_output.long(), num_classes=3).permute(0, 3, 1, 2).float()
+            dice_metric(y_pred=pred_onehot, y=y_onehot)
 
             # F1 Scores
             for i in range(x.shape[0]):
@@ -193,6 +201,9 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
 
                 f1_scores_fibre.append(f1_fibre)
                 f1_scores_axon.append(f1_axon)
+
+        dice_score = dice_metric.aggregate().item()
+        dice_metric.reset()
 
         if show_results:
             semantic = last_layer_fn(prediction[0:1, 0:3, :, :])
@@ -219,9 +230,10 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
     model.train()
 
     val_loss_mean = sum(val_loss) / len(val_loss)
-    f1_mean = (sum(f1_scores_fibre) + sum(f1_scores_axon)) / (len(f1_scores_fibre) + len(f1_scores_axon)) if (f1_scores_fibre and f1_scores_axon) else 0.0
+    f1_fibre = (sum(f1_scores_fibre)) / (len(f1_scores_fibre)) if (f1_scores_fibre) else 0.0
+    f1_axon = (sum(f1_scores_axon)) / (len(f1_scores_axon)) if (f1_scores_axon) else 0.0
 
-    return val_loss_mean, f1_mean
+    return val_loss_mean, f1_fibre, f1_axon, dice_score
 
 def loss_plot_fn(train_loss, val_loss):
     # plot train and val loss
