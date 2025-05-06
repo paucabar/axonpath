@@ -15,6 +15,20 @@ def normalize(image):
     image = (image - np.min(image)) / (np.max(image) - np.min(image))
     return image
 
+def normalize_saturated(image, low_perc=1, high_perc=99):
+    
+    # Calculate lower and upper percentile values
+    lower_bound = np.percentile(image, low_perc)
+    upper_bound = np.percentile(image, high_perc)
+    
+    # Clip the image to the lower and upper bounds
+    image_clipped = np.clip(image, lower_bound, upper_bound)
+    
+    # Normalize the image to the range [0, 1] after clipping
+    normalized_image = (image_clipped - lower_bound) / (upper_bound - lower_bound)
+    
+    return normalized_image
+
 # Methods to fill holes on label image
 # Converts a single label into a binary mask and fills its holes
 def fill_mask(image, label_id, min_area):   
@@ -230,11 +244,11 @@ def postprocessing_sdt(distancemap: torch.Tensor):
     mask_fibre = distancemap >= 0
     distancemap[distancemap < 0] = 0
     distancemap[distancemap > 1] = 1
-    distancemap = normalize(distancemap)
+    #distancemap = normalize(distancemap)
     #mask_inreg = np.logical_and(cv.GaussianBlur(distancemap,(1,1),0) >= 0.5, mask_fibre)
     mask_inreg = np.logical_and(distancemap >= 0.7, mask_fibre)
     mask_inreg = label(mask_inreg)
-    mask_inreg = remove_small_objects(mask_inreg, min_size=100, connectivity=1)
+    mask_inreg = remove_small_objects(mask_inreg, min_size=700, connectivity=1)
     mask_inreg = label(mask_inreg)
     labels = watershed(-distancemap, mask_inreg, mask=mask_fibre, connectivity=1, compactness=0.5)
     filled_labels = fill_labels(labels)
