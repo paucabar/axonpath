@@ -79,10 +79,10 @@ def load_checkpoint(checkpoint, model, optimizer):
     f1_fibre = checkpoint['f1_fibre']
     f1_axon = checkpoint['f1_axon']
     dice_score = checkpoint['dice_score']
-    score = checkpoint['score']
+    balanced_segmentation_score = checkpoint['balanced_segmentation_score']
     best_score = checkpoint['best_score']
     print("Loading checkpoint")
-    return last_epoch, train_loss, val_loss, f1_fibre, f1_axon, dice_score, score, best_score
+    return last_epoch, train_loss, val_loss, f1_fibre, f1_axon, dice_score, balanced_segmentation_score, best_score
 
 def model_fn(device):
     model = monai.networks.nets.UNet(
@@ -275,6 +275,32 @@ def loss_plot_log_fn(train_loss, val_loss):
     
     fig_loss.set_facecolor('white')
     fig_loss.savefig('loss_plot_log.png', bbox_inches='tight', dpi=300)
+
+def plot_segmentation_scores(f1_fibre, f1_axon, dice_score, balanced_segmentation_score):
+    print("\n----------------------------------------------------------------------------")
+    print("Segmentation metric trends over epochs")
+
+    epochs = np.arange(1, len(f1_fibre) + 1)
+    fig_scores = plt.figure(figsize=(10, 5))
+
+    plt.plot(epochs, f1_fibre, label="F1 Fibre")
+    plt.plot(epochs, f1_axon, label="F1 Axon")
+    plt.plot(epochs, dice_score, label="Dice Score")
+    plt.plot(epochs, balanced_segmentation_score, label="Balanced Segmentation Score", linestyle="--", color="black")
+
+    plt.title("Segmentation Scores per Epoch")
+    plt.xlabel("Epoch")
+    plt.ylabel("Score")
+    plt.ylim(0, 1.05)
+    plt.xticks(ticks=np.linspace(1, len(f1_fibre), 5).astype(int))
+    plt.legend()
+    plt.grid(True)
+    fig_scores.set_facecolor('white')
+    plt.tight_layout()
+    plt.show()
+
+    plt.savefig("segmentation_scores_plot.png", bbox_inches='tight', dpi=300)
+
 
 def save_predictions_as_imgs(
     loader, model, folder="saved_images/", device="cuda"
