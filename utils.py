@@ -250,10 +250,10 @@ def loss_plot_fn(train_loss, val_loss):
     plt.xlabel("Epoch number")
     plt.xticks(ticks=np.arange(0, len(val_loss)+1, (len(val_loss))/4).tolist())
     plt.legend()
-    plt.show()
     
     fig_loss.set_facecolor('white')
     fig_loss.savefig('loss_plot.png', bbox_inches='tight', dpi=300)
+    plt.show()
 
 def loss_plot_log_fn(train_loss, val_loss):
     # Plot train and val loss in a log scale
@@ -271,10 +271,11 @@ def loss_plot_log_fn(train_loss, val_loss):
     plt.xlabel("Epoch number")
     plt.xticks(ticks=np.arange(0, len(val_loss)+1, (len(val_loss))/4).tolist())
     plt.legend()    
-    plt.show()
     
     fig_loss.set_facecolor('white')
     fig_loss.savefig('loss_plot_log.png', bbox_inches='tight', dpi=300)
+    plt.show()
+
 
 def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmentation_score):
     print("\n----------------------------------------------------------------------------")
@@ -286,7 +287,15 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmenta
     plt.plot(epochs, f1_fibre, label="F1 Fibre")
     plt.plot(epochs, f1_axon, label="F1 Axon")
     plt.plot(epochs, dice_score, label="Dice Score")
-    plt.plot(epochs, balanced_segmentation_score, label="Balanced Segmentation Score", linestyle="--", color="black")
+    plt.plot(epochs, balanced_segmentation_score, label="Balanced Segmentation Score")
+
+    # Find best epoch (based on max balanced segmentation score)
+    best_epoch = np.argmax(balanced_segmentation_score) + 1
+    best_score = balanced_segmentation_score[best_epoch - 1]
+
+    # Draw vertical line at best epoch
+    plt.axvline(x=best_epoch, color='red', linestyle='--', label=f'Best Epoch: {best_epoch}')
+    plt.text(best_epoch + 0.5, 0.95, f'{best_score:.3f}', color='red')
 
     plt.title("Segmentation Scores per Epoch")
     plt.xlabel("Epoch")
@@ -297,9 +306,9 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmenta
     plt.grid(True)
     fig_scores.set_facecolor('white')
     plt.tight_layout()
-    plt.show()
 
     plt.savefig("segmentation_scores_plot.png", bbox_inches='tight', dpi=300)
+    plt.show()
 
 
 def save_predictions_as_imgs(
