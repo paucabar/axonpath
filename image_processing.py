@@ -32,11 +32,12 @@ def normalize_saturated(image, low_perc=1, high_perc=99):
 # Methods to fill holes on label image
 # Converts a single label into a binary mask and fills its holes
 def fill_mask(image, label_id, min_area):   
-    binary_label_id = np.where(image == label_id, 1, 0) # crates binary image containing only the specified label
-    filled = remove_small_holes(binary_label_id, min_area) # fills the binary mask
-    filled_label_id = np.where(filled == 1, label_id, 0) # creates label image containing only the specified label after filling
+    binary_label_id = (image == label_id)  # creates boolean mask directly
+    filled = remove_small_holes(binary_label_id, min_area)  # fills the binary mask
+    filled_label_id = np.where(filled, label_id, 0)  # use boolean indexing
 
     return filled_label_id
+
 
 # Fill the holes on all the masks contained in a label image
 def fill_labels(image):
