@@ -62,10 +62,11 @@ def fill_labels(image):
 
 # last layers for semantic segmentation
 def last_layer_fn(pred: torch.Tensor):
-    m = torch.nn.Softmax(dim=None)
+    m = torch.nn.Softmax(dim=1)
     smax = m(pred)
-    argmax = torch.argmax(smax, dim=1)
+    argmax = torch.argmax(smax, dim=1)  # get class predictions
     return argmax
+
 
 
 def last_layer_fn_torchscript(pred: torch.Tensor):
