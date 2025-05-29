@@ -1,10 +1,10 @@
-import os
+import os 
 import argparse
 from skimage import io
 from glob import glob
 import random
 import numpy as np
-import pandas as pd
+import csv
 from image_processing import fill_labels
 
 def shuffle_tuples_in_list(list1, list2, list3):
@@ -14,7 +14,7 @@ def shuffle_tuples_in_list(list1, list2, list3):
     list1, list2, list3 = zip(*list_of_tuples)
     return list(list1), list(list2), list(list3)
 
-def compute_tile_size(h, w, min_size=512, max_padding_ratio=0.1):
+def compute_tile_size(h, w, min_size=512, max_padding_ratio=0.1): 
     def compute_dim_tile_size(size, min_size, max_padding_ratio):
         pad = (min_size - size % min_size) % min_size
         if pad <= min_size * max_padding_ratio:
@@ -23,7 +23,6 @@ def compute_tile_size(h, w, min_size=512, max_padding_ratio=0.1):
             pad = (ts - size % ts) % ts
             if pad <= ts * max_padding_ratio:
                 return ts, pad
-        # As a last resort: force tiling with min_size even if padding exceeds the ratio
         pad = (min_size - size % min_size) % min_size
         return min_size, pad
 
@@ -45,17 +44,20 @@ def apply_padding(im, pad_h, pad_w):
     else:
         return np.pad(im, ((0, pad_h), (0, pad_w)), mode='constant')
 
-def split_tile_list(tiles, val_ratio=0.1, test_ratio=0.1):
+def split_tiles(tiles):
     random.shuffle(tiles)
-    total = len(tiles)
-    n_val = round(total * val_ratio)
-    n_test = round(total * test_ratio)
-    n_train = total - n_val - n_test
-    return (
-        tiles[:n_train],
-        tiles[n_train:n_train+n_val],
-        tiles[n_train+n_val:]
-    )
+    n_total = len(tiles)
+    if n_total >= 10:
+        n_train = round(n_total * 0.8)
+        n_val = round(n_total * 0.1)
+    elif n_total >= 3:
+        n_train = 1
+        n_val = 1
+    else:
+        n_train = 1
+        n_val = 0
+    n_test = n_total - n_train - n_val
+    return tiles[:n_train], tiles[n_train:n_train+n_val], tiles[n_train+n_val:]
 
 def create_train_val_test_split_all(in_root, out_root):
     os.makedirs(out_root, exist_ok=True)
@@ -70,16 +72,15 @@ def create_train_val_test_split_all(in_root, out_root):
         image_paths = sorted(glob(os.path.join(dataset_path, 'images', '*.tif')))
         mask_paths = sorted(glob(os.path.join(dataset_path, 'masks', '*.tif')))
         label_paths = sorted(glob(os.path.join(dataset_path, 'labels', '*.tif')))
-
         if not image_paths or len(image_paths) != len(mask_paths) or len(mask_paths) != len(label_paths):
             print(f"Skipping {dataset_path}: inconsistent file counts.")
             continue
 
         print(f"Processing dataset: {dataset} ({len(image_paths)} images)")
-
         image_paths, mask_paths, label_paths = shuffle_tuples_in_list(image_paths, mask_paths, label_paths)
 
         all_tiles = []
+        tile_counts = {}
 
         for img_path, msk_path, lbl_path in zip(image_paths, mask_paths, label_paths):
             img = io.imread(img_path)
@@ -102,23 +103,23 @@ def create_train_val_test_split_all(in_root, out_root):
             label_tiles = tile_image(label_padded, tile_h, tile_w)
 
             base_name = os.path.splitext(os.path.basename(img_path))[0]
-            for i, (im_tile, msk_tile, lbl_tile) in enumerate(zip(img_tiles, mask_tiles, label_tiles)):
-                all_tiles.append((dataset, base_name, i, im_tile, msk_tile, lbl_tile, tile_h, tile_w))
+            tile_count = len(img_tiles)
+            tile_counts[base_name] = {'count': tile_count, 'num_fibers': num_fibers, 'h': h, 'w': w}
 
-            summary_records.append([dataset, base_name, h, w, num_fibers, len(img_tiles)])
-            print(f"  Tiled {base_name}: {len(img_tiles)} tiles")
+            for i, (im_tile, msk_tile, lbl_tile) in enumerate(zip(img_tiles, mask_tiles, label_tiles)):
+                tile_name = f"{base_name}_tile{i}.tif"
+                all_tiles.append((tile_name, im_tile, msk_tile, lbl_tile, dataset, base_name))
+
+            print(f"  Tiled {base_name}: {tile_count} tiles")
 
         print(f"Splitting {len(all_tiles)} tiles...")
-        train_tiles, val_tiles, test_tiles = split_tile_list(all_tiles)
-        split_map = [(train_tiles, 'train'), (val_tiles, 'val'), (test_tiles, 'test')]
+        train_tiles, val_tiles, test_tiles = split_tiles(all_tiles)
 
-        for split_tiles, split in split_map:
-            for dataset, base_name, idx, im_tile, msk_tile, lbl_tile, tile_h, tile_w in split_tiles:
-                tile_name = f"{base_name}_tile{idx}.tif"
-
-                out_img_path = os.path.join(out_root, f"{split}_images")
-                out_mask_path = os.path.join(out_root, f"{split}_masks")
-                out_label_path = os.path.join(out_root, f"{split}_labels")
+        for split_name, tiles in zip(['train', 'val', 'test'], [train_tiles, val_tiles, test_tiles]):
+            for tile_name, im_tile, msk_tile, lbl_tile, dataset, base_name in tiles:
+                out_img_path = os.path.join(out_root, f"{split_name}_images")
+                out_mask_path = os.path.join(out_root, f"{split_name}_masks")
+                out_label_path = os.path.join(out_root, f"{split_name}_labels")
                 os.makedirs(out_img_path, exist_ok=True)
                 os.makedirs(out_mask_path, exist_ok=True)
                 os.makedirs(out_label_path, exist_ok=True)
@@ -127,24 +128,39 @@ def create_train_val_test_split_all(in_root, out_root):
                 io.imsave(os.path.join(out_mask_path, tile_name), msk_tile, check_contrast=False)
                 io.imsave(os.path.join(out_label_path, tile_name), lbl_tile.astype(np.uint16), check_contrast=False)
 
-                tile_records.append([split, tile_name, dataset, tile_h, tile_w])
+                tile_records.append([split_name, tile_name, dataset, im_tile.shape[0], im_tile.shape[1]])
+
+                if base_name in tile_counts:
+                    tile_counts[base_name][f'{split_name}_count'] = tile_counts[base_name].get(f'{split_name}_count', 0) + 1
+
+        for base_name, stats in tile_counts.items():
+            summary_records.append([
+                dataset,
+                base_name,
+                stats['h'],
+                stats['w'],
+                stats['num_fibers'],
+                stats['count'],
+                stats.get('train_count', 0),
+                stats.get('val_count', 0),
+                stats.get('test_count', 0),
+            ])
 
         print(f"Finished dataset: {dataset}\n")
 
-    # Save summary TSVs
-    summary_df = pd.DataFrame(summary_records, columns=['Dataset', 'ImageName', 'Height', 'Width', 'NumFibers', 'NumTiles'])
-    summary_df['TrainSplit'] = int(len(train_tiles))
-    summary_df['ValSplit'] = int(len(val_tiles))
-    summary_df['TestSplit'] = int(len(test_tiles))
     summary_path = os.path.join(out_root, "dataset_summary.tsv")
-    summary_df.to_csv(summary_path, sep='\t', index=False)
+    with open(summary_path, mode='w', newline='') as f:
+        writer = csv.writer(f, delimiter='\t')
+        writer.writerow(['Dataset', 'ImageName', 'Height', 'Width', 'NumFibers', 'NumTiles', 'TrainSplit', 'ValSplit', 'TestSplit'])
+        writer.writerows(summary_records)
 
-    tile_df = pd.DataFrame(tile_records, columns=['Split', 'ImageName', 'Dataset', 'Height', 'Width'])
     tile_list_path = os.path.join(out_root, "tiles_info.tsv")
-    tile_df.to_csv(tile_list_path, sep='\t', index=False)
+    with open(tile_list_path, mode='w', newline='') as f:
+        writer = csv.writer(f, delimiter='\t')
+        writer.writerow(['Split', 'ImageName', 'Dataset', 'Height', 'Width'])
+        writer.writerows(tile_records)
 
-    print(f"\n Done! Saved:\n  - Summary: {summary_path}\n  - Tile list: {tile_list_path}\n  - Total tiles: {len(tile_df)} from {len(summary_df)} images.\n")
-
+    print(f"\n Done! Saved:\n  - Summary: {summary_path}\n  - Tile list: {tile_list_path}\n  - Total tiles: {len(tile_records)} from {len(summary_records)} images.\n")
 
 def main():
     parser = argparse.ArgumentParser(description="Prepare U-Net training data from datasets.")
