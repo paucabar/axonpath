@@ -20,9 +20,12 @@ def compute_tile_size(h, w, min_size=512, max_padding_ratio=0.1):
         if pad <= min_size * max_padding_ratio:
             return min_size, pad
         for ts in range(min_size + 1, 2000):
-            if size % ts == 0:
-                return ts, 0
-        return size, 0
+            pad = (ts - size % ts) % ts
+            if pad <= ts * max_padding_ratio:
+                return ts, pad
+        # As a last resort: force tiling with min_size even if padding exceeds the ratio
+        pad = (min_size - size % min_size) % min_size
+        return min_size, pad
 
     tile_h, pad_h = compute_dim_tile_size(h, min_size, max_padding_ratio)
     tile_w, pad_w = compute_dim_tile_size(w, min_size, max_padding_ratio)
