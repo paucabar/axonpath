@@ -1,70 +1,74 @@
 import os
 import torch
 import torch.nn as nn
-import torchvision
+import numpy as np
 from torch.utils.data import DataLoader
 import monai
 from monai.metrics import DiceMetric
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+import colorcet as cc
 
 from dataset import AimSegDataset
-
-from matplotlib.colors import LinearSegmentedColormap
-import colorcet as cc
-import matplotlib as mpl
-import numpy as np
-import torch as t
-import matplotlib.pyplot as plt
-
-from skimage.measure import label
-
 from evaluation2 import SegmentationEvaluator
 from image_processing import (
     postprocessing_sdt,
     last_layer_fn
 )
 
-def show_images(*img_list,binaries=[],titles=[],save_str=False,n_cols=3,axes=False,cmap="plasma",labels=[],dpi=None):
-    """Designed to plot torch tensor and numpy arrays in windows robustly"""    
-    if dpi:
-        mpl.rcParams['figure.dpi'] = dpi    
-        img_list = [img for img in img_list]
-    if isinstance(img_list[0], list):
-        img_list = img_list[0]
-    rows=(len(img_list)-1)//n_cols+1    
-    columns=np.min([n_cols,len(img_list)])
-    fig = plt.figure(figsize=(5*(columns+1),5*(rows+1)))
-    fig.tight_layout() 
-    grid = plt.GridSpec(rows,columns,figure=fig)
-    grid.update(wspace=0.2, hspace=0, left = None, right =None, bottom = None, top = None)
-    for i,img in enumerate(img_list):
-        if t.is_tensor(img):
-            img=t.squeeze(img).detach().cpu().numpy()
-        if len(img.shape)>2:
-            img=np.moveaxis(img,np.argmin(img.shape),-1)
-            if img.shape[-1]>3 or img.shape[-1]==2:
-                show_images([img[...,i] for i in range(img.shape[-1])],binaries=binaries,titles=["Channel:"+str(i) for i in range(img.shape[-1])],save_str=save_str,n_cols=n_cols,axes=axes,cmap=cmap)
-                continue        
-        ax1 = plt.subplot(grid[i])
-        if not axes:
-            plt.axis('off')
-        if i in binaries:
-            im=ax1.imshow(img,vmin=0,vmax=1,cmap=cmap,interpolation='nearest')
-        if i in labels:
-            l=cc.cm.glasbey_bw_minc_20_minl_30_r.colors            
-            l[0]=[0,0,0]
-            cmap_lab = LinearSegmentedColormap.from_list('my_list', l, N=1000)
-            im=ax1.imshow(img,cmap=cmap_lab,interpolation='nearest')
+def get_glasbey_cmap():
+    l = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
+    l[0] = [0, 0, 0]
+    return LinearSegmentedColormap.from_list('glasbey', l, N=256)
+
+def apply_cmap(image, cmap):
+    if cmap == "glasbey":
+        glasbey = get_glasbey_cmap()
+        rgba = glasbey(image / np.max(image))
+        return np.uint8(rgba[:, :, :3] * 255), None  # RGB image, no colorbar
+    else:
+        return image, cmap  # Return as-is for matplotlib to handle
+
+def get_glasbey_cmap():
+    l = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
+    l[0] = [0, 0, 0]
+    return ListedColormap(l)
+
+def show_images(*images, titles=None, cmaps=None, n_cols=3, figsize=(15, 10)):
+    n_images = len(images)
+    titles = titles or [f"Image {i}" for i in range(n_images)]
+    cmaps = cmaps or ["gray"] * n_images
+
+    n_rows = int(np.ceil(n_images / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
+    axes = axes.flatten() if n_images > 1 else [axes]
+
+    for idx, (img, title, cmap) in enumerate(zip(images, titles, cmaps)):
+        ax = axes[idx]
+        img_np = img.cpu().numpy() if hasattr(img, "cpu") else img
+        img_np = np.squeeze(img_np)
+
+        if cmap == "glasbey":
+            cmap_obj = get_glasbey_cmap()
+            im = ax.imshow(img_np, cmap=cmap_obj, interpolation="nearest", vmin=0, vmax=cmap_obj.N - 1)
+            # Manually add colorbar
+            norm = mpl.colors.Normalize(vmin=0, vmax=cmap_obj.N - 1)
+            sm = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
+            sm.set_array([])
+            plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
         else:
-            im=ax1.imshow(img,cmap=cmap)
-        plt.colorbar(im, ax=ax1,fraction=0.046, pad=0.04)
-        if len(titles)==len(img_list):
-            ax1.set_title(titles[i])
-    if not save_str:
-        plt.show()
-    if save_str:
-        plt.savefig(save_str+".png",bbox_inches='tight')
-        plt.close()
-        return None
+            im = ax.imshow(img_np, cmap=cmap)
+            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+        ax.set_title(title)
+        ax.axis("off")
+
+    for ax in axes[n_images:]:
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.show()
 
 def save_checkpoint(state, filename="model_checkpoint.pth.tar"):
     print("Saving checkpoint")
@@ -89,7 +93,7 @@ def model_fn(device):
         spatial_dims=2,
         in_channels=1,
         out_channels=5,
-        channels=(8, 16, 32, 64, 128), #(16, 32, 64, 128, 256) or (32, 64, 128, 256, 512)
+        channels=(8, 16, 32, 64, 128),
         strides=(2, 2, 2, 2),
         num_res_units=2,
         dropout=0.25,
@@ -143,12 +147,6 @@ def get_loaders(
     )
     return train_loader, val_loader
 
-
-def accuracy_fn(sem_pred, sem_targ):
-    intersection = (sem_pred == sem_targ).sum()
-    pixels_total = torch.numel(sem_pred)
-    accuracy = intersection / pixels_total
-    return accuracy
 
 def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
     model.eval()
@@ -224,6 +222,11 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
                     "Target Semantic", "Pred Fibre SDT", "Pred Axon SDT",
                     "Prediction Semantic", "Prediction Fibre Instance", "Prediction Axon Instance"
                 ],
+                cmaps=[
+                    "gray", "glasbey", "glasbey",
+                    "viridis", "magma", "magma",
+                    "viridis", "glasbey", "glasbey"
+                ],
                 n_cols=3
             )
 
@@ -246,7 +249,6 @@ def loss_plot_fn(train_loss, val_loss):
     plt.plot(np.arange(1,len(val_loss)+1).tolist(), val_loss, label = "Validation loss")
     plt.title('Training and validation loss vs epoch number (linear)')
     plt.ylabel("Loss")
-    #plt.ylim(0,0.2)
     plt.xlabel("Epoch number")
     plt.xticks(ticks=np.arange(0, len(val_loss)+1, (len(val_loss))/4).tolist())
     plt.legend()
@@ -309,23 +311,6 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmenta
 
     plt.savefig("segmentation_scores_plot.png", bbox_inches='tight', dpi=300)
     plt.show()
-
-
-def save_predictions_as_imgs(
-    loader, model, folder="saved_images/", device="cuda"
-):
-    model.eval()
-    for idx, (x, y) in enumerate(loader):
-        x = x.to(device=device)
-        with torch.no_grad():
-            preds = torch.sigmoid(model(x))
-            preds = (preds > 0.5).float()
-        torchvision.utils.save_image(
-            preds, f"{folder}/pred_{idx}.png"
-        )
-        torchvision.utils.save_image(y.unsqueeze(1), f"{folder}{idx}.png")
-
-    model.train()
 
 
 
