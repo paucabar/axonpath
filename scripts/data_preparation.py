@@ -104,8 +104,8 @@ def create_train_val_test_split_all(in_root, out_root):
             axon_instance = label(fill_labels(axon_mask.astype(np.int16)))
 
             # Distance transforms
-            sdt_fibre, _, _ = LabelDistanceTransforms(filled_label, 0.3, True, False, True).skeleton_aware_dist_trans()
-            sdt_axon, _, _ = LabelDistanceTransforms(axon_instance, 0.15, True, False, True).skeleton_aware_dist_trans()
+            sdt_fibre, _, _ = LabelDistanceTransforms(filled_label, 0.3, False, False, True).skeleton_aware_dist_trans()
+            sdt_axon, _, _ = LabelDistanceTransforms(axon_instance, 0.15, False, False, True).skeleton_aware_dist_trans()
 
 
             h, w = label_raw.shape
@@ -131,12 +131,20 @@ def create_train_val_test_split_all(in_root, out_root):
             tile_count = len(img_tiles)
             tile_counts[base_name] = {'count': tile_count, 'num_fibers': num_fibers, 'h': h, 'w': w}
 
-            for i, (im_tile, msk_tile, lbl_tile) in enumerate(zip(img_tiles, mask_tiles, label_tiles)):
-                tile_name = f"{base_name}_tile{i}"
-                all_tiles.append((tile_name, im_tile, msk_tile, lbl_tile, axon_tiles[i], sdt_fibre_tiles[i], sdt_axon_tiles[i], dataset, base_name))
+            valid_count = 0
+            for i, (im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile) in enumerate(
+                zip(img_tiles, mask_tiles, label_tiles, axon_tiles, sdt_fibre_tiles, sdt_axon_tiles)
+            ):
+                if not np.any(lbl_tile > 0):
+                    continue  # Skip tiles with no fibre labels
 
+                tile_name = f"{base_name}_tile{valid_count}"  # renumber only valid tiles
+                all_tiles.append((tile_name, im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile, dataset, base_name))
+                valid_count += 1
 
-            print(f"  Tiled {base_name}: {tile_count} tiles")
+            tile_counts[base_name] = {'count': valid_count, 'num_fibers': num_fibers, 'h': h, 'w': w}
+            print(f"  Tiled {base_name}: {valid_count} valid tiles (skipped {tile_count - valid_count})")
+
 
         print(f"Splitting {len(all_tiles)} tiles...")
         train_tiles, val_tiles, test_tiles = split_tiles(all_tiles)

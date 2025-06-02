@@ -1,165 +1,127 @@
 import numpy as np
-from numpy import ndarray
 import edt
-from utils.image_processing import fill_labels
+from numpy import ndarray
 from skimage.measure import regionprops, label
-from skimage.segmentation import expand_labels
-from skimage.morphology import skeletonize, remove_small_objects, remove_small_holes
-from scipy.ndimage import distance_transform_edt
-from skimage.segmentation import watershed
-from skimage.filters import sobel
-import line_profiler
-
-def timer(func):
-    import functools
-    from line_profiler import LineProfiler
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        lp = LineProfiler()
-        lp_wrapper = lp(func)
-        lp_wrapper(*args, **kwargs)
-        lp.print_stats()
-        value = func(*args, **kwargs)
-        return value
- 
-    return wrapper
-
-# Erosion method to quickly process labelled images
-def erode_labels(image: ndarray):
-    edges = sobel(image) != 0
-    image_eroded = np.where(edges == False, image, 0)
-    return image_eroded
-
-# Calculate boundary distance transform from labelled image
-def boundary_dist_trans(image: ndarray):
-    eroded = erode_labels(image)
-    dist_map = distance_transform_edt(eroded)
-    return dist_map
-
-# Calculate skeleton distance transforms from a specific label
-def stack_sdt(image_stack: ndarray, skeleton: ndarray):   
-    skeleton_stack = image_stack * skeleton # creates a binary image containing only the specified skeleton
-    skeleton_stack_inverted = 1 - skeleton_stack # invert skeleton
-    for z in range(skeleton_stack_inverted.shape[0]):
-        slice = skeleton_stack_inverted[z, :, :]
-        slice_distance_transform = distance_transform_edt(slice)
-        skeleton_stack_inverted[z, :, :] = slice_distance_transform
-    distmap = np.where(image_stack, skeleton_stack_inverted, 0) # keep only the distance map for the label
-    return distmap
-
-# get a skeleton distance transforms from all the masks contained in a label image
-def skeleton_dist_trans(image: ndarray):
-    eroded = erode_labels(image) # erode label image
-    eroded = label(eroded) # relabel to have integers
-    skeleton = skeletonize(eroded > 0, method='lee') # skeletonize binary image
-    skeleton = skeleton > 0 # make sure it's binary (lee method returns an 8-bit image with 0 (False) and 255 (True)))
-    
-    binary_list = [] # creates empty list to save images of individual distance transforms
-    regions = regionprops(eroded)
-
-    # gets the image transform of every label and stores them as individual images
-    for i in range(len(regions)):
-        label_id = regions[i].label # gets the label id of the current region
-        binary_label_id = np.where(image == label_id, 1, 0) # crates binary image containing only the specified label
-        binary_list.append(binary_label_id) # stores the image on the list
-    binary_stack = np.stack(binary_list) # creates stack from list of images (numpy arrays)
-
-    # generates a new image containing all the distance transforms 
-    dist_trans_stack = stack_sdt(binary_stack, skeleton) # creates image containing only the specified distance transform
-    image_dist_trans = np.max(dist_trans_stack, axis = 0) # calculates the maximum projection to get back a 2D image
-    return image_dist_trans
-
-"""
-Distance transform methods using GPU
-Uses edt library
-"""
-
-# Calculate boundary distance transform from labelled image
-def boundary_dist_trans_2(image: ndarray):
-# Compute the Euclidean distance transform for the labeled image
-    dt = edt.edt(
-        image,
-        anisotropy=(1, 1), # Assuming equal spacing in x and y directions
-        black_border=True,
-        order='C', # 'C' (C-order, XYZ, row-major) and 'F' (Fortran-order, ZYX, column major)
-        parallel=2 # Number of threads, <= 0 sets to num CPU
-    )
-    return dt
-
-# Function to get skeleton for each unique label
-def get_skeleton_for_labels(image: ndarray):
-    unique_labels = np.unique(image)
-    skeleton = np.zeros_like(image, dtype=bool)
-    for label in unique_labels:
-        if label == 0:
-            continue  # Skip background
-        label_mask = (image == label)
-        skeletonized_label = skeletonize(label_mask)
-        skeleton[label_mask] = skeletonized_label[label_mask]
-    return skeleton
-
-def skeleton_dist_trans_2(image: ndarray, skeleton: ndarray):
-    unique_labels = np.unique(image)
-    dt_within_labels = np.zeros_like(image, dtype=float)
-    
-    for label in unique_labels:
-        if label == 0:
-            continue  # Skip background
-        
-        # Create a mask for the current label
-        label_mask = (image == label)
-        
-        # Get the bounding box coordinates for the current label
-        region_props = regionprops(label_mask.astype(int))
-        bbox = region_props[0].bbox  # Get bounding box coordinates
-        min_row, min_col, max_row, max_col = bbox
-        
-        # Extract the region of interest for the bounding box
-        label_bbox = label_mask[min_row:max_row, min_col:max_col]
-        skeleton_bbox = skeleton[min_row:max_row, min_col:max_col] & label_bbox
-        
-        # Invert the skeleton within the bounding box
-        inverted_skeleton_bbox = ~skeleton_bbox
-        
-        # Compute the distance transform within the bounding box
-        dt_bbox = edt.edt(inverted_skeleton_bbox, black_border=False, order='C', parallel=1)
-        
-        # Place the computed distance transform values into the output image
-        dt_within_labels[min_row:max_row, min_col:max_col][label_bbox] = dt_bbox[label_bbox]
-    
-    return dt_within_labels
-
-
-"""
-Safely divide two images element-wise while handling division by zero.
-
-Args:
-    image1 (numpy.ndarray): The first image (numpy array).
-    image2 (numpy.ndarray): The second image (numpy array).
-
-Returns:
-    numpy.ndarray: The result of the division with handling division by zero.
-"""
-
-def safe_divide_images(image1, image2):
-    # Check for division by zero and set the result to zero where it occurs
-    with np.errstate(divide='ignore', invalid='ignore'):
-        result = np.true_divide(image1, image2)
-        result[~np.isfinite(result)] = 0  # Handle division by zero and NaN cases
-
-    return result
-
-def skeleton_aware_dist_trans(image: ndarray, alpha: float):
-    bdt = boundary_dist_trans_2(image)
-    sdt = skeleton_dist_trans_2(image)
-    sadt_function = safe_divide_images(bdt, bdt + sdt) ** alpha
-    return sadt_function
-
-
+from skimage.morphology import skeletonize
+from scipy.ndimage import binary_fill_holes
 
 
 class LabelDistanceTransforms:
-    def __init__(self, label_image: ndarray, alpha: float = 0.8, fill_gt: bool = True, background_transform: bool = False, signed_background = False):
+    def __init__(
+        self,
+        label_image: ndarray,
+        alpha: float = 0.3,
+        fill_gt: bool = False,
+        background_transform: bool = False,
+        signed_background: bool = False
+    ):
+        """
+        Initialize the LabelDistanceTransforms class.
+
+        Args:
+            label_image (ndarray): 2D array of labeled regions (0 is background).
+            alpha (float): Exponent for soft skeleton-aware transform.
+            fill_gt (bool): Whether to fill holes in label masks.
+            background_transform (bool): Whether to subtract background soft transform.
+            signed_background (bool): Whether to set background to -1.
+        """
+        if label_image.ndim != 2:
+            raise ValueError("label_image must be a 2D array.")
+        if not np.issubdtype(label_image.dtype, np.integer):
+            raise TypeError("label_image must contain integers (label IDs).")
+
+        self.label_image = label_image
+        self.alpha = alpha
+        self.fill_gt = fill_gt
+        self.background_transform = background_transform
+        self.signed_background = signed_background
+
+        self.regions = regionprops(label_image.astype(np.int32))
+        self.region_lookup = {r.label: r for r in self.regions}
+
+    def __safe_divide_images(self, image1: ndarray, image2: ndarray):
+        """Safely divides two images, avoiding division by zero."""
+        with np.errstate(divide='ignore', invalid='ignore'):
+            result = np.true_divide(image1, image2)
+            result[~np.isfinite(result)] = 0
+        return result
+
+    def _fill_mask(self, mask: ndarray):
+        """Fill holes in binary mask using full area."""
+        return binary_fill_holes(mask)
+
+    def _compute_skeleton(self, mask: ndarray):
+        """Skeletonize a binary mask."""
+        skeleton = skeletonize(mask, method='lee')
+        return skeleton & mask  # Ensure it stays within mask
+
+    def _compute_distance_transforms(self, image: ndarray):
+        """
+        Compute boundary and skeleton distance transforms for each label
+        using bounding boxes for efficiency.
+        """
+        boundary_dt = np.zeros_like(image, dtype=float)
+        skeleton_dt = np.zeros_like(image, dtype=float)
+
+        for region in self.regions:
+            label_id = region.label
+            min_row, min_col, max_row, max_col = region.bbox
+
+            label_mask = (image == label_id)
+            cropped_mask = label_mask[min_row:max_row, min_col:max_col]
+
+            if self.fill_gt:
+                cropped_mask = self._fill_mask(cropped_mask)
+
+            # Boundary distance transform
+            bdt_crop = edt.edt(cropped_mask, black_border=False, parallel=2)
+            boundary_dt[min_row:max_row, min_col:max_col][cropped_mask] = bdt_crop[cropped_mask]
+
+            # Skeleton distance transform
+            skeleton_crop = self._compute_skeleton(cropped_mask)
+            inv_skel_crop = ~skeleton_crop & cropped_mask
+            sdt_crop = edt.edt(inv_skel_crop, black_border=False, parallel=2)
+            skeleton_dt[min_row:max_row, min_col:max_col][cropped_mask] = sdt_crop[cropped_mask]
+
+        return boundary_dt, skeleton_dt
+
+    def _compute_background_transforms(self, image: ndarray):
+        """
+        Compute soft-aware distance transform on background as if it were labeled.
+        """
+        background_mask = (image == 0)
+        labeled_background = label(background_mask.astype(np.uint8))
+        bdt, sdt = self._compute_distance_transforms(labeled_background)
+        sadt_background = self.__safe_divide_images(bdt, bdt + sdt) ** self.alpha
+        return sadt_background
+
+    def _get_background_mask(self, image: ndarray):
+        return (image == 0)
+
+    def skeleton_aware_dist_trans(self):
+        """
+        Compute the skeleton-aware distance transform (SADT) function.
+        Returns:
+            sadt_function (ndarray): Final skeleton-aware function.
+            bdt (ndarray): Boundary distance transform.
+            sdt (ndarray): Skeleton distance transform.
+        """
+        bdt, sdt = self._compute_distance_transforms(self.label_image)
+        sadt_function = self.__safe_divide_images(bdt, bdt + sdt) ** self.alpha
+
+        if self.background_transform:
+            sadt_background = self._compute_background_transforms(self.label_image)
+            sadt_function = sadt_function - sadt_background
+
+        if self.signed_background:
+            sadt_function[self._get_background_mask(self.label_image)] = -1
+
+        return sadt_function, bdt, sdt
+
+
+
+class LabelDistanceTransformsOld:
+    def __init__(self, label_image: ndarray, alpha: float = 0.3, fill_gt: bool = True, background_transform: bool = False, signed_background = False):
         self.label_image = fill_labels(label_image)
         self.alpha = alpha
         self.fill_gt = fill_gt
