@@ -21,8 +21,8 @@ from utils import (
 LEARNING_RATE = 1e-3
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 8
-NUM_EPOCHS = 1000
-NUM_WORKERS = 4
+NUM_EPOCHS = 10
+NUM_WORKERS = 0
 IMAGE_HEIGHT = 512
 IMAGE_WIDTH = 512
 PIN_MEMORY = True
@@ -70,6 +70,12 @@ def main():
 
     train_transform, val_transform = transforms_fn(IMAGE_HEIGHT, IMAGE_WIDTH)
     train_dataset, val_dataset = get_datasets(TRAIN_IMG_DIR, VAL_IMG_DIR, train_transform, val_transform)
+
+    # Load image data in train and val dataset caches
+    train_dataset.populate_cache()
+    print(train_dataset)
+    val_dataset.populate_cache()
+    print(val_dataset)
 
     norm_type = "group" if BATCH_SIZE < 8 else "batch"
     model = model_fn(DEVICE, norm_type=norm_type)

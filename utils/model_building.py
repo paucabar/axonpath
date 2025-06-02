@@ -1,3 +1,6 @@
+import torch
+import numpy as np
+import random
 from torch.utils.data import DataLoader
 from monai.networks.nets import UNet
 from monai.networks.layers import Norm
@@ -35,12 +38,20 @@ def get_datasets(
     train_dataset = AimSegDataset(
         tile_dir=train_tile_dir,
         transform=train_transform,
+        cache=True
     )
     val_dataset = AimSegDataset(
         tile_dir=val_tile_dir,
         transform=val_transform,
+        cache=True
     )
     return train_dataset, val_dataset
+
+def worker_init_fn(worker_id):
+    # Each worker gets a unique seed based on the initial seed and worker ID
+    base_seed = torch.initial_seed() % 2**32
+    np.random.seed(base_seed + worker_id)
+    random.seed(base_seed + worker_id)
 
 def get_loaders(
     train_dataset,
@@ -55,6 +66,7 @@ def get_loaders(
         num_workers=num_workers,
         pin_memory=pin_memory,
         shuffle=True,
+        worker_init_fn=worker_init_fn
     )
     val_loader = DataLoader(
         val_dataset,
