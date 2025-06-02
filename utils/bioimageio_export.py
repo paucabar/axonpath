@@ -1,0 +1,148 @@
+import os
+from PIL import Image
+
+# the imports for bioimage.io model export
+import bioimageio.core
+from bioimageio.core.build_spec import build_model
+from bioimageio.core.resource_tests import test_model
+
+import numpy as np
+import torch
+import torch.nn as nn
+import monai
+
+from utils.image_processing import normalize, last_layer_fn_torchscript
+
+import torch
+import torch.nn as nn
+
+class pipeline(nn.Module):
+    def __init__(self,model):
+        super(pipeline,self).__init__()
+        self.model = model
+
+    def forward(self,data : torch.Tensor):
+        pred = self.model(data)
+        semantic = last_layer_fn_torchscript(pred[:, 0:3, :, :])
+        distance_transform_fibre = pred[:, 3, :, :]
+        distance_transform_axon = pred[:, 4, :, :]
+        output = torch.cat((semantic, distance_transform_fibre, distance_transform_axon), dim=0)
+
+        return output[None].float()
+
+class pipeline_padding(nn.Module):
+    def __init__(self, model):
+        super(pipeline_padding, self).__init__()
+        self.model = model
+
+    def forward(self, data: torch.Tensor):
+        # Pad the input to 512x512
+        pad_height = max(0, 512 - data.size(2))
+        pad_width = max(0, 512 - data.size(3))
+        
+        data = nn.functional.pad(data, (0, pad_width, 0, pad_height), mode='constant')
+
+        # Forward pass through the model
+        pred = self.model(data)
+        semantic = last_layer_fn_torchscript(pred[:, 0:3, :, :])
+        distance_transform_fibre = pred[:, 3, :, :]
+        distance_transform_axon = pred[:, 4, :, :]
+        output = torch.cat((semantic, distance_transform_fibre, distance_transform_axon), dim=0)
+        
+        output = output[None]
+
+        # Unpad the output to remove the extra padding
+        output = output[:, :, :output.size(2) - pad_height, :output.size(3) - pad_width]
+
+        return output.float()
+
+def readme(model_name: str):
+    # create markdown documentation for your model
+    # this should describe how the model was trained, (and on which data)
+    # and also what to take into consideration when running the model, especially how to validate the model
+    # here, we just create a stub documentation
+    with open(os.path.join(model_name, model_name + "_README.md"), "w") as f:
+        f.write("# My First Model\n")
+        f.write("This model was trained on a very big dataset.\n")
+        f.write("You should not let it get wet or feed it after midnight.\n")
+        f.write("To validate its predictins, make sure that it does not produce any evil clones.\n")
+
+
+def export_bioimageio(model: monai.networks.nets.unet.UNet, model_name: str, deepimagej: bool, test_img_path: str):
+    # create a temporary directory to store intermediate files
+    os.makedirs(model_name, exist_ok=True)
+
+    model.eval()
+    device = "cpu"
+    model.to(device)
+
+    # import test data
+    input_ = np.array(Image.open(test_img_path)).astype(np.float32)
+    input_ = normalize(input_)[(None,)*2] # unsqueeze(0) twice
+    data = torch.tensor((input_))#.to(device)
+    print(data.shape)
+
+    # export to torchscript and save the model weights
+    crop = data[:,:,:512,:512]#.to(device)
+    my_pipeline = pipeline_padding(model)
+    model = torch.jit.script(my_pipeline, crop.to(device))
+    torch.jit.save(model, os.path.join(model_name, "weights.pt"))
+
+    # create test data for this model: an input image and an output image
+    # this data will be used for model test runs to ensure the model runs correctly and that the expected output can be reproduced
+    # NOTE: if you have pre-and-post-processing in your model (see the more advanced models for an example)
+    # you will need to save the input BEFORE preprocessing and the output AFTER postprocessing
+
+    np.save(os.path.join(model_name, "test-input.npy"), crop)
+
+    with torch.no_grad():
+        output = model(crop.to(device))
+        print(output.shape)
+    np.save(os.path.join(model_name, "test-output.npy"), output)
+
+    # create readme
+    readme(model_name)
+
+    # now we can use the build_model function to create the zipped package.
+    # it takes the path to the weights and data we have just created, as well as additional information
+    # that will be used to add metadata to the rdf.yaml file in the model zip
+    # we only use a subset of the available options here, please refer to the advanced examples and to the
+    # function signature of build_model in order to get an overview of the full functionality
+    _ = build_model(
+        # the weight file and the type of the weights
+        weight_uri = os.path.join(model_name, "weights.pt"),
+        weight_type = "torchscript",
+        # the test input and output data
+        test_inputs = [os.path.join(model_name, "test-input.npy")],
+        test_outputs = [os.path.join(model_name, "test-output.npy")],
+        # where to save the model zip, how to call the model and a short description of it
+        output_path = os.path.join(model_name, model_name + ".zip"),
+        name = model_name,
+        description = "a fancy new model",
+        # additional metadata about authors, licenses, citation etc.
+        authors = [{"name": "Pau Carrillo-Barberà"}],
+        license = "CC-BY-4.0",
+        documentation = os.path.join(model_name, model_name + "_README.md"),
+        tags = ["axon-segmentation"],  # the tags are used to make models more findable on the website
+        cite = [{"text": "Carrillo-Barberà et al.", "doi": "TODO"}],
+        # description of the tensors
+        # these are passed as list because we support multiple inputs / outputs per model
+        input_names = ["raw"],
+        input_axes = ["bcyx"],
+        input_min_shape = [[1, 1, 512, 512]],
+        input_step = [[0, 0, 256, 256]],
+        output_names = ["semantic"],
+        output_axes=["bcyx"],
+        output_reference = ["raw"],
+        output_scale = [[1.0, 3.0, 1.0, 1.0]],
+        output_offset = [[0.0, 0.0, 0.0, 0.0]],
+        preprocessing = None,
+        add_deepimagej_config = deepimagej,
+    )
+
+    # finally, we test that the expected outptus are reproduced when running the model.
+    # the 'test_model' function runs this test.
+    # it will output a list of dictionaries. each dict gives the status of a different test that is being run
+    # if all of them contain "status": "passed" then all tests were successful
+    my_model = bioimageio.core.load_resource_description(os.path.join(model_name, model_name + ".zip")) 
+    test_model(my_model)

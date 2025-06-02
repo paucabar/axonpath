@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import ndarray
 import edt
-from image_processing import fill_labels
+from utils.image_processing import fill_labels
 from skimage.measure import regionprops, label
 from skimage.segmentation import expand_labels
 from skimage.morphology import skeletonize, remove_small_objects, remove_small_holes

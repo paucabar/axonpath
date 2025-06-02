@@ -11,10 +11,7 @@ import torch
 import torch.nn as nn
 import monai
 
-from image_processing import (
-    normalize,
-    last_layer_fn_torchscript,
-)
+from utils.image_processing import normalize, last_layer_fn_torchscript
 
 import torch
 import torch.nn as nn

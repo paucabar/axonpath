@@ -1,12 +1,70 @@
 import os
 from PIL import Image
+import torch
 from torch.utils.data import Dataset
 import numpy as np
 from skimage.measure import label
-from image_processing import normalize, fill_labels
-from skeleton_aware_distance_transform import LabelDistanceTransforms
+from glob import glob
+from utils.image_processing import normalize, normalize_saturated, fill_labels
+from skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
 class AimSegDataset(Dataset):
+    def __init__(self, tile_dir, transform=None):
+        self.tile_paths = sorted(glob(os.path.join(tile_dir, "*.npy")))
+        print(f"Loaded {len(self.tile_paths)} .npy tiles from {tile_dir}")
+        self.transform = transform
+
+    def __getitem__(self, idx):
+        path = self.tile_paths[idx]
+
+        try:
+            data = np.load(path, allow_pickle=True).item()
+        except Exception as e:
+            print(f"Error loading .npy file at {path}: {e}")
+            raise RuntimeError(f"Corrupt .npy: {path}") from e
+
+        try:
+            image = normalize_saturated(data["image"]).astype(np.float32)
+
+            mask_sem = data["mask_sem"]
+            np.putmask(mask_sem, mask_sem == 3, 2)
+
+            masks = [
+                data["mask_fibre"],
+                data["mask_axon"],
+                mask_sem,
+                data["sdt_fibre"],
+                data["sdt_axon"]
+            ]
+
+            if self.transform:
+                try:
+                    transformed = self.transform(image=image, masks=masks)
+                    image = transformed["image"]
+                    masks = transformed["masks"]
+                except Exception as e:
+                    print(f"[Worker {os.getpid()}] Transform failed: {e}")
+                    raise RuntimeError(f"Albumentations transform failed on {path}") from e
+
+            # Robust conversion to torch.Tensor
+            image_tensor = image if isinstance(image, torch.Tensor) else torch.from_numpy(image)
+            masks_tensor = [
+                m if isinstance(m, torch.Tensor) else torch.from_numpy(m.astype(np.float32))
+                for m in masks
+            ]
+
+            return image_tensor, masks_tensor
+
+        except Exception as e:
+            print(f"Transform or tensor conversion failed on {path}: {e}")
+            raise RuntimeError(f"Failed to transform or convert data from {path}") from e
+
+
+    def __len__(self):
+        return len(self.tile_paths)
+
+
+class AimSegDatasetOld(Dataset):
     def __init__(self, image_dir, masksem_dir, maskins_dir, transform=None):
         self.image_dir = image_dir
         self.masksem_dir = masksem_dir

@@ -5,7 +5,14 @@ from glob import glob
 import random
 import numpy as np
 import csv
-from image_processing import fill_labels
+from skimage.measure import label
+
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.image_processing import fill_labels
+from skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
+
 
 def shuffle_tuples_in_list(list1, list2, list3):
     assert len(list1) == len(list2) == len(list3)
@@ -86,10 +93,20 @@ def create_train_val_test_split_all(in_root, out_root):
             img = io.imread(img_path)
             mask = io.imread(msk_path)
             label_raw = io.imread(lbl_path)
-
-            filled_label = fill_labels(label_raw.astype(np.int32))
+            
+            # Fill instance labels
+            filled_label = fill_labels(label_raw.astype(np.int16))
             unique_values = np.unique(filled_label)
             num_fibers = len(unique_values[unique_values != 0])
+            
+            # Axon instance mask
+            axon_mask = (mask == 3).astype(np.uint8)
+            axon_instance = label(fill_labels(axon_mask.astype(np.int16)))
+
+            # Distance transforms
+            sdt_fibre, _, _ = LabelDistanceTransforms(filled_label, 0.3, True, False, True).skeleton_aware_dist_trans()
+            sdt_axon, _, _ = LabelDistanceTransforms(axon_instance, 0.15, True, False, True).skeleton_aware_dist_trans()
+
 
             h, w = label_raw.shape
             tile_h, tile_w, pad_h, pad_w = compute_tile_size(h, w)
@@ -97,18 +114,27 @@ def create_train_val_test_split_all(in_root, out_root):
             img_padded = apply_padding(img, pad_h, pad_w)
             mask_padded = apply_padding(mask, pad_h, pad_w)
             label_padded = apply_padding(filled_label, pad_h, pad_w)
+            axon_instance_padded = apply_padding(axon_instance, pad_h, pad_w)
+            sdt_fibre_padded = apply_padding(sdt_fibre, pad_h, pad_w)
+            sdt_axon_padded = apply_padding(sdt_axon, pad_h, pad_w)
+
 
             img_tiles = tile_image(img_padded, tile_h, tile_w)
             mask_tiles = tile_image(mask_padded, tile_h, tile_w)
             label_tiles = tile_image(label_padded, tile_h, tile_w)
+            sdt_fibre_tiles = tile_image(sdt_fibre_padded, tile_h, tile_w)
+            sdt_axon_tiles = tile_image(sdt_axon_padded, tile_h, tile_w)
+            axon_tiles = tile_image(axon_instance_padded, tile_h, tile_w)
+
 
             base_name = os.path.splitext(os.path.basename(img_path))[0]
             tile_count = len(img_tiles)
             tile_counts[base_name] = {'count': tile_count, 'num_fibers': num_fibers, 'h': h, 'w': w}
 
             for i, (im_tile, msk_tile, lbl_tile) in enumerate(zip(img_tiles, mask_tiles, label_tiles)):
-                tile_name = f"{base_name}_tile{i}.tif"
-                all_tiles.append((tile_name, im_tile, msk_tile, lbl_tile, dataset, base_name))
+                tile_name = f"{base_name}_tile{i}"
+                all_tiles.append((tile_name, im_tile, msk_tile, lbl_tile, axon_tiles[i], sdt_fibre_tiles[i], sdt_axon_tiles[i], dataset, base_name))
+
 
             print(f"  Tiled {base_name}: {tile_count} tiles")
 
@@ -116,17 +142,22 @@ def create_train_val_test_split_all(in_root, out_root):
         train_tiles, val_tiles, test_tiles = split_tiles(all_tiles)
 
         for split_name, tiles in zip(['train', 'val', 'test'], [train_tiles, val_tiles, test_tiles]):
-            for tile_name, im_tile, msk_tile, lbl_tile, dataset, base_name in tiles:
-                out_img_path = os.path.join(out_root, f"{split_name}_images")
-                out_mask_path = os.path.join(out_root, f"{split_name}_masks")
-                out_label_path = os.path.join(out_root, f"{split_name}_labels")
-                os.makedirs(out_img_path, exist_ok=True)
-                os.makedirs(out_mask_path, exist_ok=True)
-                os.makedirs(out_label_path, exist_ok=True)
+            for tile_name, im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile, dataset, base_name in tiles:
+                out_tile_path = os.path.join(out_root, f"{split_name}_tiles")
+                os.makedirs(out_tile_path, exist_ok=True)
 
-                io.imsave(os.path.join(out_img_path, tile_name), im_tile, check_contrast=False)
-                io.imsave(os.path.join(out_mask_path, tile_name), msk_tile, check_contrast=False)
-                io.imsave(os.path.join(out_label_path, tile_name), lbl_tile.astype(np.uint16), check_contrast=False)
+                tile_data = {
+                    "image": im_tile,
+                    "mask_sem": msk_tile,
+                    "mask_fibre": lbl_tile,
+                    "mask_axon": axon_tile,
+                    "sdt_fibre": sdt_fibre_tile,
+                    "sdt_axon": sdt_axon_tile,
+                }
+                np.save(os.path.join(out_tile_path, f"{tile_name}.npy"), tile_data)
+
+
+
 
                 tile_records.append([split_name, tile_name, dataset, im_tile.shape[0], im_tile.shape[1]])
 
@@ -164,8 +195,8 @@ def create_train_val_test_split_all(in_root, out_root):
 
 def main():
     parser = argparse.ArgumentParser(description="Prepare U-Net training data from datasets.")
-    parser.add_argument('--input', type=str, default="datasets", help='Input root folder with datasets')
-    parser.add_argument('--output', type=str, default="prepared_data", help='Output root folder')
+    parser.add_argument('--input', type=str, default="../datasets", help='Input root folder with datasets')
+    parser.add_argument('--output', type=str, default="../prepared_data", help='Output root folder')
     args = parser.parse_args()
 
     create_train_val_test_split_all(args.input, args.output)
