@@ -53,7 +53,7 @@ class LabelDistanceTransforms:
     def _compute_skeleton(self, mask: ndarray):
         """Skeletonize a binary mask."""
         skeleton = skeletonize(mask, method='lee')
-        return skeleton & mask  # Ensure it stays within mask
+        return skeleton
 
     def _compute_distance_transforms(self, image: ndarray):
         """
@@ -79,9 +79,11 @@ class LabelDistanceTransforms:
 
             # Skeleton distance transform
             skeleton_crop = self._compute_skeleton(cropped_mask)
-            inv_skel_crop = ~skeleton_crop & cropped_mask
+            inv_skel_crop = ~skeleton_crop
             sdt_crop = edt.edt(inv_skel_crop, black_border=False, parallel=2)
-            skeleton_dt[min_row:max_row, min_col:max_col][cropped_mask] = sdt_crop[cropped_mask]
+            sdt_crop_masked = sdt_crop * cropped_mask
+            skeleton_dt[min_row:max_row, min_col:max_col][cropped_mask] = sdt_crop_masked[cropped_mask]
+
 
         return boundary_dt, skeleton_dt
 
