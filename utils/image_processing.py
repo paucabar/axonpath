@@ -39,25 +39,106 @@ def fill_mask(image, label_id, min_area):
     return filled_label_id
 
 
-# Fill the holes on all the masks contained in a label image
-def fill_labels(image):
-    regions = regionprops(image.astype(int))
 
-    if len(regions) > 0:
-        # Initialize the result image as a copy of the input image
-        image_filled = np.copy(image)
+def fill_border_holes(mask: np.ndarray) -> np.ndarray:
+    """
+    Python adaptation of the 'Fill_Border_Holes' ImageJ macro by G. Landini.
+    Fills holes in binary masks, including those that touch at most two borders 
+    (i.e., corners or edges), mimicking the macro's logic using edge manipulation.
 
-        # Fill each label one at a time and update the result image
-        for i in range(len(regions)):
-            label_id = regions[i].label
-            filled_label = fill_mask(image, label_id, regions[i].area)
-            
-            # Update the result image in-place
-            np.maximum(image_filled, filled_label, out=image_filled)
+    Original macro by G. Landini:
+    https://sites.imagej.net/Landini/plugins/Morphology/Fill_Border_Holes.ijm-20140627120652
 
-        return image_filled
-    else:
-        return image
+    Args:
+        mask (np.ndarray): Binary mask (2D boolean or 0/1 array).
+
+    Returns:
+        np.ndarray: Mask with internal and edge-connected holes filled.
+    """
+    if mask.ndim != 2:
+        raise ValueError("Only 2D arrays supported.")
+
+    h, w = mask.shape
+    padded = np.pad(mask.astype(bool), 1, mode='constant', constant_values=0)
+    filled = padded.copy()
+
+    # Step 1: Right and top borders set to 1
+    filled[0, :] = True           # top row
+    filled[:, -1] = True          # right column
+    filled = binary_fill_holes(filled)
+
+    # Step 2: Reset top to 0, bottom to 1
+    filled[0, :] = False
+    filled[-1, :] = True
+    filled = binary_fill_holes(filled)
+
+    # Step 3: Reset right to 0, left to 1
+    filled[:, -1] = False
+    filled[:, 0] = True
+    filled = binary_fill_holes(filled)
+
+    # Step 4: Reset top to 1, bottom to 0
+    filled[0, :] = True
+    filled[-1, :] = False
+    filled = binary_fill_holes(filled)
+
+    # Step 5: Remove padding
+    result = filled[1:-1, 1:-1]
+
+    return result.astype(bool)
+
+
+def fill_labels(label_image: np.ndarray) -> np.ndarray:
+    """
+    Fill holes in each labeled region, including edge-touching enclosed holes,
+    using bounding box cropping for efficiency.
+
+    Args:
+        label_image (np.ndarray): 2D labeled image with integer labels.
+
+    Returns:
+        np.ndarray: Labeled image with holes filled per instance.
+    """
+    if label_image.ndim != 2:
+        raise ValueError("label_image must be a 2D array.")
+    if not np.issubdtype(label_image.dtype, np.integer):
+        raise TypeError("label_image must contain integer labels.")
+
+    filled_image = np.copy(label_image)
+    height, width = label_image.shape
+
+    regions = regionprops(label_image.astype(np.int32))
+
+    for region in regions:
+        label_id = region.label
+        min_row, min_col, max_row, max_col = region.bbox
+
+        # Add 1-pixel padding, but stay within image bounds
+        pad_top = 1 if min_row > 0 else 0
+        pad_bottom = 1 if max_row < height else 0
+        pad_left = 1 if min_col > 0 else 0
+        pad_right = 1 if max_col < width else 0
+
+        pad_min_row = min_row - pad_top
+        pad_max_row = max_row + pad_bottom
+        pad_min_col = min_col - pad_left
+        pad_max_col = max_col + pad_right
+
+        cropped_label = label_image[pad_min_row:pad_max_row, pad_min_col:pad_max_col]
+        region_mask = (cropped_label == label_id)
+
+        # Fill internal and edge-touching holes
+        filled_region_mask = fill_border_holes(region_mask)
+
+        # Assign newly filled pixels back to output image
+        filled_image[pad_min_row:pad_max_row, pad_min_col:pad_max_col][filled_region_mask] = label_id
+
+
+    return filled_image
+
+
+
+
 
 
 # last layers for semantic segmentation

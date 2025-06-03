@@ -101,7 +101,7 @@ def create_train_val_test_split_all(in_root, out_root):
             
             # Axon instance mask
             axon_mask = (mask == 3).astype(np.uint8)
-            axon_instance = label(fill_labels(axon_mask.astype(np.int16)))
+            axon_instance = fill_labels(label(axon_mask.astype(np.int16)))
 
             # Distance transforms
             sdt_fibre, _, _ = LabelDistanceTransforms(filled_label, 0.3, False, False, True).skeleton_aware_dist_trans()
