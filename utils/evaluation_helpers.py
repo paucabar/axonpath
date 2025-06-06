@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from monai.metrics import DiceMetric
 from utils.visualization import show_images
-from utils.image_processing import last_layer_fn, postprocessing_sdt
+from utils.image_processing import apply_semantic_segmentation_head, segment_instances_from_sdt
 from evaluation.segmentation_evaluator import SegmentationEvaluator
 
 
@@ -33,7 +33,7 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
             val_loss.append((val_crossentropy_loss + val_mse_loss1 + val_mse_loss2).item())
 
             # Dice Score
-            sem_output = last_layer_fn(prediction[:, 0:3, :, :])
+            sem_output = apply_semantic_segmentation_head(prediction[:, 0:3, :, :])
             y_sem = y[:, 2, :, :]  # only semantic GT
             y_onehot = nn.functional.one_hot(y_sem.long(), num_classes=3).permute(0, 3, 1, 2).float()
             pred_onehot = nn.functional.one_hot(sem_output.long(), num_classes=3).permute(0, 3, 1, 2).float()
@@ -42,8 +42,8 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
             # F1 Scores
             for i in range(x.shape[0]):
                 # Predicted instances
-                pred_fibre = postprocessing_sdt(prediction[i:i+1, 3, :, :])
-                pred_axon = postprocessing_sdt(prediction[i:i+1, 4, :, :])
+                pred_fibre = segment_instances_from_sdt(prediction[i:i+1, 3, :, :])
+                pred_axon = segment_instances_from_sdt(prediction[i:i+1, 4, :, :])
 
                 # Ground truth instances
                 gt_fibre = y[i, 0, :, :].cpu().numpy().astype(np.int32)  # assuming channel 0 is fibre
@@ -63,9 +63,9 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
         dice_metric.reset()
 
         if show_results:
-            semantic = last_layer_fn(prediction[0:1, 0:3, :, :])
-            labels_fibre = postprocessing_sdt(prediction[0:1, 3, :, :])
-            labels_axon = postprocessing_sdt(prediction[0:1, 4, :, :])
+            semantic = apply_semantic_segmentation_head(prediction[0:1, 0:3, :, :])
+            labels_fibre = segment_instances_from_sdt(prediction[0:1, 3, :, :])
+            labels_axon = segment_instances_from_sdt(prediction[0:1, 4, :, :])
             show_images(
                 x[0].cpu(),
                 y[0, 0, :, :].cpu(),

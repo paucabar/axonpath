@@ -1,38 +1,21 @@
 import os
 from PIL import Image
+import numpy as np
+import torch
+import torch.nn as nn
+import monai
+from utils.image_processing import normalize, apply_semantic_segmentation_head_scriptable
 
 # the imports for bioimage.io model export
 import bioimageio.core
 from bioimageio.core.build_spec import build_model
 from bioimageio.core.resource_tests import test_model
 
-import numpy as np
-import torch
-import torch.nn as nn
-import monai
 
-from utils.image_processing import normalize, last_layer_fn_torchscript
-
-import torch
-import torch.nn as nn
 
 class pipeline(nn.Module):
-    def __init__(self,model):
-        super(pipeline,self).__init__()
-        self.model = model
-
-    def forward(self,data : torch.Tensor):
-        pred = self.model(data)
-        semantic = last_layer_fn_torchscript(pred[:, 0:3, :, :])
-        distance_transform_fibre = pred[:, 3, :, :]
-        distance_transform_axon = pred[:, 4, :, :]
-        output = torch.cat((semantic, distance_transform_fibre, distance_transform_axon), dim=0)
-
-        return output[None].float()
-
-class pipeline_padding(nn.Module):
     def __init__(self, model):
-        super(pipeline_padding, self).__init__()
+        super(pipeline, self).__init__()
         self.model = model
 
     def forward(self, data: torch.Tensor):
@@ -44,7 +27,7 @@ class pipeline_padding(nn.Module):
 
         # Forward pass through the model
         pred = self.model(data)
-        semantic = last_layer_fn_torchscript(pred[:, 0:3, :, :])
+        semantic = apply_semantic_segmentation_head_scriptable(pred[:, 0:3, :, :])
         distance_transform_fibre = pred[:, 3, :, :]
         distance_transform_axon = pred[:, 4, :, :]
         output = torch.cat((semantic, distance_transform_fibre, distance_transform_axon), dim=0)
@@ -84,7 +67,7 @@ def export_bioimageio(model: monai.networks.nets.unet.UNet, model_name: str, dee
 
     # export to torchscript and save the model weights
     crop = data[:,:,:512,:512]#.to(device)
-    my_pipeline = pipeline_padding(model)
+    my_pipeline = pipeline(model)
     model = torch.jit.script(my_pipeline, crop.to(device))
     torch.jit.save(model, os.path.join(model_name, "weights.pt"))
 

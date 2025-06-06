@@ -9,4 +9,4 @@ from .visualization import (
 from .checkpointing import save_checkpoint, load_checkpoint
 from .model_building import model_fn, get_datasets, get_loaders
 from .evaluation_helpers import evaluate_fn
-from .image_processing import normalize, fill_labels, postprocessing_sdt, last_layer_fn
+from .image_processing import normalize, fill_labels, apply_semantic_segmentation_head, segment_instances_from_sdt
