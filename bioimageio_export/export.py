@@ -13,31 +13,59 @@ from bioimageio.core.resource_tests import test_model
 
 
 
-class pipeline(nn.Module):
-    def __init__(self, model):
-        super(pipeline, self).__init__()
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from utils.image_processing import apply_semantic_segmentation_head_scriptable
+
+
+class Pipeline(nn.Module):
+    """
+    TorchScript-compatible inference pipeline.
+
+    This wraps a model and handles input padding, semantic head application,
+    and output reassembly.
+    """
+
+    def __init__(self, model: nn.Module):
+        super().__init__()
         self.model = model
+        self.target_height = 512
+        self.target_width = 512
 
-    def forward(self, data: torch.Tensor):
-        # Pad the input to 512x512
-        pad_height = max(0, 512 - data.size(2))
-        pad_width = max(0, 512 - data.size(3))
-        
-        data = nn.functional.pad(data, (0, pad_width, 0, pad_height), mode='constant')
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass with padding, inference, semantic head, and unpadding.
 
-        # Forward pass through the model
-        pred = self.model(data)
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, C, H, W)
+
+        Returns:
+            torch.Tensor: Output tensor after postprocessing (1, C_out, H, W)
+        """
+        b, c, h, w = x.shape
+        pad_h = max(0, self.target_height - h)
+        pad_w = max(0, self.target_width - w)
+
+        # Pad input
+        x = F.pad(x, (0, pad_w, 0, pad_h), mode='constant')
+
+        # Model forward
+        pred = self.model(x)
+
+        # Semantic segmentation postprocessing
         semantic = apply_semantic_segmentation_head_scriptable(pred[:, 0:3, :, :])
-        distance_transform_fibre = pred[:, 3, :, :]
-        distance_transform_axon = pred[:, 4, :, :]
-        output = torch.cat((semantic, distance_transform_fibre, distance_transform_axon), dim=0)
-        
-        output = output[None]
+        dt_fibre = pred[:, 3, :, :]
+        dt_axon = pred[:, 4, :, :]
 
-        # Unpad the output to remove the extra padding
-        output = output[:, :, :output.size(2) - pad_height, :output.size(3) - pad_width]
+        # Combine all outputs
+        output = torch.cat((semantic, dt_fibre, dt_axon), dim=0).unsqueeze(0)
+
+        # Remove padding
+        output = output[:, :, :h, :w]
 
         return output.float()
+
 
 
 def export_torchscript_model(
@@ -58,7 +86,7 @@ def export_torchscript_model(
     model.eval()
     model.to(device)
 
-    scripted_pipeline = pipeline(model)
+    scripted_pipeline = Pipeline(model)
 
     if example_input is None:
         # Default dummy input (1 channel, 512x512)
@@ -97,7 +125,7 @@ def export_bioimageio(model: monai.networks.nets.unet.UNet, model_name: str, dee
 
     # export to torchscript and save the model weights
     crop = data[:,:,:512,:512]#.to(device)
-    my_pipeline = pipeline(model)
+    my_pipeline = Pipeline(model)
     model = torch.jit.script(my_pipeline, crop.to(device))
     torch.jit.save(model, os.path.join(model_name, "weights.pt"))
 
