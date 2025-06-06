@@ -26,11 +26,11 @@ NUM_WORKERS = 0
 IMAGE_HEIGHT = 512
 IMAGE_WIDTH = 512
 PIN_MEMORY = True
-LOAD_MODEL = False
-TRAIN_IMG_DIR = "prepared_data/train_tiles/"
-VAL_IMG_DIR = "prepared_data/val_tiles/"
-SHOW_VAL_INTERVAL = 1000
-BIOIMAGEIO = "best"  # "none", "best", "last"
+LOAD_MODEL = True
+TRAIN_IMG_DIR = "prepared_data_em/train_tiles/"
+VAL_IMG_DIR = "prepared_data_em/val_tiles/"
+SHOW_VAL_INTERVAL = 10
+BIOIMAGEIO = False
 MODEL_NAME = "pending"
 
 def train_fn(loader, model, optimizer, loss_fn, scaler):
@@ -149,16 +149,19 @@ def main():
     loss_plot_log_fn(train_loss, val_loss)
     plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmentation_score)
 
-    # Export to BioImage.IO format
-    if BIOIMAGEIO != "none":
+    # Export model
+    export_model = model_fn(DEVICE)
+    export_model.load_state_dict(torch.load("best_weights_model.pth"))
+    if BIOIMAGEIO:
         print("Exporting model to BioImage.IO format...")
         from bioimageio_export.export import export_bioimageio
-        export_model = model_fn(DEVICE)
-        if BIOIMAGEIO == "last":
-            export_model.load_state_dict(torch.load("last_epoch_model.pth"))
-        elif BIOIMAGEIO == "best":
-            export_model.load_state_dict(torch.load("best_weights_model.pth"))
+        export_model.load_state_dict(torch.load("best_weights_model.pth"))
         export_bioimageio(export_model, "AimSegDL", True, r"data_tem/test_images/P03B_Frame6_t0.tif")
+    else:
+        print("Exporting torchscript...")
+        from bioimageio_export.export import export_torchscript_model
+        export_torchscript_model(export_model, "my_model_weights.pt")
+
 
 if __name__ == "__main__":
     main()
