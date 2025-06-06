@@ -4,7 +4,7 @@ import random
 from torch.utils.data import DataLoader
 from monai.networks.nets import UNet
 from monai.networks.layers import Norm
-from dataset.aimseg_dataset import AimSegDataset
+from aimsegdl.dataset.aimseg_dataset import AimSegDataset
 
 
 

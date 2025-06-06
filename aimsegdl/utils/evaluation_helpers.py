@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 from monai.metrics import DiceMetric
-from utils.visualization import show_images
-from utils.image_processing import apply_semantic_segmentation_head, segment_instances_from_sdt
-from evaluation.segmentation_evaluator import SegmentationEvaluator
+from aimsegdl.utils.visualization import show_images
+from aimsegdl.utils.image_processing import apply_semantic_segmentation_head, segment_instances_from_sdt
+from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
 
 
 def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):

@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 
-from transforms.custom_transforms import transforms_fn
-from utils import (
+from aimsegdl.transforms.custom_transforms import transforms_fn
+from aimsegdl.utils import (
     load_checkpoint,
     save_checkpoint,
     model_fn,
@@ -21,7 +21,7 @@ from utils import (
 LEARNING_RATE = 1e-3
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 8
-NUM_EPOCHS = 10
+NUM_EPOCHS = 20
 NUM_WORKERS = 0
 IMAGE_HEIGHT = 512
 IMAGE_WIDTH = 512
@@ -29,9 +29,9 @@ PIN_MEMORY = True
 LOAD_MODEL = True
 TRAIN_IMG_DIR = "prepared_data_em/train_tiles/"
 VAL_IMG_DIR = "prepared_data_em/val_tiles/"
-SHOW_VAL_INTERVAL = 10
+SHOW_VAL_INTERVAL = 20
 BIOIMAGEIO = False
-MODEL_NAME = "pending"
+MODEL_NAME = "aimsegdl"
 
 def train_fn(loader, model, optimizer, loss_fn, scaler):
     loop = tqdm(loader)
@@ -154,13 +154,13 @@ def main():
     export_model.load_state_dict(torch.load("best_weights_model.pth"))
     if BIOIMAGEIO:
         print("Exporting model to BioImage.IO format...")
-        from bioimageio_export.export import export_bioimageio
+        from aimsegdl.export_utils.model_export import export_bioimageio
         export_model.load_state_dict(torch.load("best_weights_model.pth"))
-        export_bioimageio(export_model, "AimSegDL", True, r"data_tem/test_images/P03B_Frame6_t0.tif")
+        export_bioimageio(export_model, MODEL_NAME + "_bioimageio", True, r"data_tem/test_images/P03B_Frame6_t0.tif")
     else:
         print("Exporting torchscript...")
-        from bioimageio_export.export import export_torchscript_model
-        export_torchscript_model(export_model, "my_model_weights.pt")
+        from aimsegdl.export_utils.model_export import export_torchscript_model
+        export_torchscript_model(export_model, MODEL_NAME + ".pt")
 
 
 if __name__ == "__main__":

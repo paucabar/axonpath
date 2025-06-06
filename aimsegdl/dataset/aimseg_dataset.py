@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 import numpy as np
 from tqdm import tqdm
 from glob import glob
-from utils.image_processing import normalize
+from aimsegdl.utils.image_processing import normalize
 
 class AimSegDataset(Dataset):
     def __init__(self, tile_dir, transform=None, cache=False):
