@@ -9,8 +9,8 @@ from skimage.measure import label
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.image_processing import fill_labels
-from skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
+from aimsegdl.utils.image_processing import fill_labels
+from aimsegdl.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
 
 def shuffle_tuples_in_list(list1, list2, list3):
