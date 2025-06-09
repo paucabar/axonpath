@@ -5,6 +5,7 @@ from . import dataset
 from . import skeleton
 from . import evaluation
 from . import export_utils
+from . import training
 
 __all__ = [
     "Pipeline",
@@ -14,4 +15,5 @@ __all__ = [
     "skeleton",
     "evaluation",
     "export_utils",
+    "training"
 ]

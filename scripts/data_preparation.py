@@ -6,9 +6,6 @@ import random
 import numpy as np
 import csv
 from skimage.measure import label
-
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from aimsegdl.utils.image_processing import fill_labels
 from aimsegdl.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
