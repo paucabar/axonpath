@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import os
+import pkg_resources
 from aimsegdl.transforms.custom_transforms import transforms_fn
 from aimsegdl.utils import (
     model_fn, get_datasets, get_loaders, load_checkpoint, save_checkpoint,
@@ -10,6 +12,17 @@ from aimsegdl.utils import (
 from aimsegdl.training.train_loop import train_loop
 from aimsegdl.training.config import TrainingConfig
 
+
+def get_pretrained_path(weight_name_or_path: str) -> str:
+    # If it's already a valid file path, return as-is
+    if os.path.isfile(weight_name_or_path):
+        return weight_name_or_path
+
+    # Try loading from package (e.g., aimsegdl/weights/aimseg_pretrained.pth)
+    try:
+        return pkg_resources.resource_filename("aimsegdl.weights", weight_name_or_path + ".pth")
+    except Exception:
+        raise FileNotFoundError(f"Pretrained weights '{weight_name_or_path}' not found.")
 
 def train(config):
     device = config.device
@@ -34,8 +47,9 @@ def train(config):
     last_epoch = 0
 
     if config.pretrained_weights:
-        print(f"Loading pretrained weights from {config.pretrained_weights}")
-        model.load_state_dict(torch.load(config.pretrained_weights))
+        pretrained_path = get_pretrained_path(config.pretrained_weights)
+        print(f"Loading pretrained weights from {pretrained_path}")
+        model.load_state_dict(torch.load(pretrained_path))
     elif config.load_checkpoint:
         last_epoch, train_loss, val_loss, f1_fibre, f1_axon, dice_score, balanced_seg_score, best_score = \
             load_checkpoint(torch.load("model_checkpoint.pth.tar"), model, optimizer)
@@ -89,7 +103,7 @@ def train(config):
 
     # Export logic
     export_model = model_fn(config.device)
-    export_model.load_state_dict(torch.load(f"best_weights_{config.model_name}.pth"))
+    export_model.load_state_dict(torch.load(f"best_weights_model.pth"))
     if config.bioimageio:
         from aimsegdl.export_utils.model_export import export_bioimageio
         export_bioimageio(export_model, config.model_name + "_bioimageio", True, r"data_tem/test_images/P03B_Frame6_t0.tif")
