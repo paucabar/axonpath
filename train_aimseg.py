@@ -17,14 +17,14 @@ def main():
     parser.add_argument("--num_workers", type=int, help="Number of data loading workers")
     parser.add_argument("--image_height", type=int, help="Image height")
     parser.add_argument("--image_width", type=int, help="Image width")
-    parser.add_argument("--pretrained_weights", type=str, help="Path to .pt weights file to initialize model")
+    parser.add_argument("--pretrained_weights", type=str, help="Path to .pth weights file or model name (if available) to initialize model")
     parser.add_argument("--load_checkpoint", action="store_true", help="Resume from checkpoint")
     parser.add_argument("--bioimageio", action="store_true", help="Export BioImage.IO package")
     parser.add_argument("--model_name", type=str, help="Name for saving model and logs")
 
     args = parser.parse_args()
 
-    # Data preparation ---
+    # Data preparation
     input_root = args.data_input or "datasets"
     output_root = args.data_output or "prepared_data"
     create_train_val_test_split_all(in_root=input_root, out_root=output_root)
