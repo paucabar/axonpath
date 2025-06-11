@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 import colorcet as cc
 
@@ -124,4 +125,23 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmenta
     plt.tight_layout()
 
     plt.savefig("segmentation_scores_plot.png", bbox_inches='tight', dpi=300)
+    plt.show()
+
+
+def plot_iou_distributions(df, label):
+    """
+    Plot IoU/F1 distributions for each image.
+
+    Args:
+        df (pd.DataFrame): DataFrame with metrics from evaluator.
+        label (str): Name of target type (e.g., Fibre or Axon).
+    """
+    plt.figure(figsize=(10, 5))
+    sns.lineplot(
+        data=df,
+        x="Threshold",
+        y="F1",
+        )
+    plt.title(f"{label} F1 Scores Across IoU Thresholds")
+    plt.grid(False)
     plt.show()

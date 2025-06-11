@@ -4,7 +4,8 @@ from .visualization import (
     show_images,
     loss_plot_fn,
     loss_plot_log_fn,
-    plot_segmentation_scores_fn
+    plot_segmentation_scores_fn,
+    plot_iou_distributions,
 )
 from .checkpointing import save_checkpoint, load_checkpoint
 from .model_building import model_fn, get_datasets, get_loaders
