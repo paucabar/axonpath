@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import os
+from pathlib import Path
 import pkg_resources
 from aimsegdl.transforms.custom_transforms import transforms_fn
 from aimsegdl.utils import (
@@ -13,18 +14,40 @@ from aimsegdl.training.train_loop import train_loop
 from aimsegdl.training.config import TrainingConfig
 
 
+try:
+    # Use pkg_resources only if available
+    import pkg_resources
+except ImportError:
+    pkg_resources = None
+
 def get_pretrained_path(weight_name_or_path: str) -> str:
-    # If it's already a valid file path, return as-is
+    """
+    Return the full path to the specified pretrained weights file.
+    - If a direct file path is provided and exists, it's returned as-is.
+    - Otherwise, it attempts to locate the file in the aimsegdl.weights package (for installed packages).
+    - If not found, and running in a development environment, it checks aimsegdl/weights/ folder manually.
+    """
+    # If it's an existing full path, return it
     if os.path.isfile(weight_name_or_path):
         return weight_name_or_path
 
-    # Try loading from package (e.g., aimsegdl/weights/aimseg_pretrained.pth)
-    try:
-        return pkg_resources.resource_filename("aimsegdl.weights", weight_name_or_path + ".pth")
-    except Exception:
-        raise FileNotFoundError(f"Pretrained weights '{weight_name_or_path}' not found.")
+    # Try pkg_resources (for installed package)
+    if pkg_resources:
+        try:
+            return pkg_resources.resource_filename("aimsegdl.weights", weight_name_or_path + ".pth")
+        except Exception:
+            pass  # Fall back to dev mode
 
-def train(config):
+    # Fallback: Check local dev path (e.g., aimsegdl/weights/)
+    dev_weights_path = Path(__file__).resolve().parent.parent / "weights" / (weight_name_or_path + ".pth")
+    if dev_weights_path.is_file():
+        return str(dev_weights_path)
+
+    # Not found
+    raise FileNotFoundError(f"Pretrained weights '{weight_name_or_path}' not found in package or local dev path.")
+
+
+def train(config: TrainingConfig):
     device = config.device
 
     train_tf, val_tf = transforms_fn(config.image_height, config.image_width)
