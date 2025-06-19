@@ -5,6 +5,7 @@ import random
 import numpy as np
 import csv
 from skimage.measure import label
+from skimage.segmentation import clear_border
 from aimsegdl.utils.image_processing import fill_labels
 from aimsegdl.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
@@ -73,9 +74,23 @@ def fix_label_edge_padding(fibre_lbl, axon_lbl, mask_sem):
     return new_fibre, new_axon, new_mask, fixed
 
 
-def split_tiles(tiles):
+def split_tiles(tiles, create_test_split=True):
+    """
+    Split tiles into train, val, (optional) test sets.
+
+    Args:
+        tiles (list): List of tile data.
+        create_test_split (bool): Whether to create a separate test split.
+
+    Returns:
+        tuple: train_tiles, val_tiles, test_tiles
+    """
     random.shuffle(tiles)
     n_total = len(tiles)
+
+    if n_total < 1:
+        raise ValueError("No tiles to split.")
+
     if n_total >= 10:
         n_train = round(n_total * 0.8)
         remaining = n_total - n_train
@@ -86,13 +101,20 @@ def split_tiles(tiles):
         n_val = 1
         n_test = 1
     else:
-        n_train = 1
-        n_val = 0
-        n_test = n_total - 1
+        n_train = n_total - 1
+        n_val = 1
+        n_test = 0
+
+    # Merge test into train if test split is disabled
+    if not create_test_split:
+        n_train += n_test
+        n_test = 0
+
     return tiles[:n_train], tiles[n_train:n_train+n_val], tiles[n_train+n_val:]
 
 
-def create_train_val_test_split_all(in_root, out_root, fix_label_padding=True):
+
+def create_train_val_test_split_all(in_root, out_root, fix_label_padding=True, create_test_split=True):
     os.makedirs(out_root, exist_ok=True)
     summary_records = []
     tile_records = []
@@ -116,10 +138,10 @@ def create_train_val_test_split_all(in_root, out_root, fix_label_padding=True):
         tile_counts = {}
 
         for img_path, msk_path, lbl_path in zip(image_paths, mask_paths, label_paths):
-            img = io.imread(img_path)
-            mask = io.imread(msk_path)
+            img = io.imread(img_path).astype(np.float32)
+            mask = io.imread(msk_path).astype(np.uint8)
             axon_mask = (mask == 3).astype(np.uint8)
-            label_raw = io.imread(lbl_path)
+            label_raw = io.imread(lbl_path).astype(np.uint16)
 
             # Optional edge fix
             if fix_label_padding:
@@ -162,7 +184,7 @@ def create_train_val_test_split_all(in_root, out_root, fix_label_padding=True):
             for i, (im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile) in enumerate(
                 zip(img_tiles, mask_tiles, label_tiles, axon_tiles, sdt_fibre_tiles, sdt_axon_tiles)
             ):
-                if not np.any(lbl_tile > 0):
+                if not np.any(clear_border(lbl_tile) > 0):
                     continue
 
                 tile_name = f"{base_name}_tile{valid_count}"
@@ -178,7 +200,7 @@ def create_train_val_test_split_all(in_root, out_root, fix_label_padding=True):
             print(f"  Tiled {base_name}: {valid_count} valid tiles (skipped {tile_count - valid_count})")
 
         print(f"Splitting {len(all_tiles)} tiles...")
-        train_tiles, val_tiles, test_tiles = split_tiles(all_tiles)
+        train_tiles, val_tiles, test_tiles = split_tiles(all_tiles, create_test_split)
 
         for split_name, tiles in zip(['train', 'val', 'test'], [train_tiles, val_tiles, test_tiles]):
             for tile_name, im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile, dataset, base_name in tiles:

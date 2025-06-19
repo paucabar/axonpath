@@ -1,5 +1,6 @@
 import argparse
 import torch
+import time
 from aimsegdl.training.config import TrainingConfig
 from aimsegdl.training.train import train
 from aimsegdl.data_preparation.data_preparation import create_train_val_test_split_all
@@ -53,3 +54,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    time.sleep(10)

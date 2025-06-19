@@ -100,7 +100,7 @@ def train(config: TrainingConfig):
         score = 0.4 * f1_fib + 0.4 * f1_ax + 0.2 * dice
         balanced_seg_score.append(score)
 
-        print(f"Train: {t_loss:.4f} | Val: {v_loss:.4f} | F1: {f1_fib:.4f}/{f1_ax:.4f} | Dice: {dice:.4f} | BSS: {score:.4f}")
+        print(f"Train: {t_loss:.4f} | Val: {v_loss:.4f} | F1 Fibre: {f1_fib:.4f} | F1 Axon: {f1_ax:.4f} | Dice: {dice:.4f} | Balanced Segmentation Score: {score:.4f}")
 
         if score > best_score:
             best_score = score
