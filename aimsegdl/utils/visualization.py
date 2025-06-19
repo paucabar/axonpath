@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 import colorcet as cc
-
+mpl.use("TkAgg")
 
 def get_glasbey_cmap():
     l = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
@@ -18,6 +18,7 @@ def apply_cmap(image, cmap):
         return np.uint8(rgba[:, :, :3] * 255), None  # RGB image, no colorbar
     else:
         return image, cmap  # Return as-is for matplotlib to handle
+
 
 def show_images(*images, titles=None, cmaps=None, n_cols=3, figsize=(15, 10)):
     n_images = len(images)
@@ -36,14 +37,13 @@ def show_images(*images, titles=None, cmaps=None, n_cols=3, figsize=(15, 10)):
         if cmap == "glasbey":
             cmap_obj = get_glasbey_cmap()
             im = ax.imshow(img_np, cmap=cmap_obj, interpolation="nearest", vmin=0, vmax=cmap_obj.N - 1)
-            # Manually add colorbar
             norm = mpl.colors.Normalize(vmin=0, vmax=cmap_obj.N - 1)
             sm = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
             sm.set_array([])
-            plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+            fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
         else:
             im = ax.imshow(img_np, cmap=cmap)
-            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
         ax.set_title(title)
         ax.axis("off")
@@ -51,97 +51,116 @@ def show_images(*images, titles=None, cmaps=None, n_cols=3, figsize=(15, 10)):
     for ax in axes[n_images:]:
         ax.axis("off")
 
-    plt.tight_layout()
-    plt.show()
+    fig.tight_layout()
+    plt.show(block=False)
+    plt.pause(0.001)
+
 
 def loss_plot_fn(train_loss, val_loss):
-    # plot train and val loss
     print("\n----------------------------------------------------------------------------")
     print("\nTraining and validation loss")
-    
-    fig_loss = plt.gcf()
-    
-    plt.plot(np.arange(1,len(train_loss)+1).tolist(), train_loss, label = "Training loss")
-    plt.plot(np.arange(1,len(val_loss)+1).tolist(), val_loss, label = "Validation loss")
-    plt.title('Training and validation loss vs epoch number (linear)')
-    plt.ylabel("Loss")
-    plt.xlabel("Epoch number")
-    plt.xticks(ticks=np.arange(0, len(val_loss)+1, (len(val_loss))/4).tolist())
-    plt.legend()
-    
-    fig_loss.set_facecolor('white')
-    fig_loss.savefig('loss_plot.png', bbox_inches='tight', dpi=300)
-    plt.show()
+
+    fig, ax = plt.subplots()
+    ax.plot(range(1, len(train_loss) + 1), train_loss, label="Training loss")
+    ax.plot(range(1, len(val_loss) + 1), val_loss, label="Validation loss")
+
+    ax.set_title('Training and validation loss vs epoch number (linear)')
+    ax.set_ylabel("Loss")
+    ax.set_xlabel("Epoch number")
+    ax.set_xticks(np.linspace(1, len(val_loss), 5).astype(int))
+    ax.legend()
+
+    fig.set_facecolor('white')
+    fig.tight_layout()
+    fig.savefig('loss_plot.png', bbox_inches='tight', dpi=300)
+    plt.show(block=False)
+    plt.pause(0.001)
+
 
 def loss_plot_log_fn(train_loss, val_loss):
-    # Plot train and val loss in a log scale
     print("\n----------------------------------------------------------------------------")
-    print("\nTraining and validation loss")
-    
-    fig_loss = plt.gcf()
-    
-    plt.plot(np.arange(1, len(train_loss) + 1).tolist(), train_loss, label="Training loss")
-    plt.plot(np.arange(1, len(val_loss) + 1).tolist(), val_loss, label="Validation loss")
-    
-    plt.yscale('log')  # Apply a logarithmic scale to the y-axis
-    plt.title('Training and validation loss vs epoch number (log)')
-    plt.ylabel("Log Loss")
-    plt.xlabel("Epoch number")
-    plt.xticks(ticks=np.arange(0, len(val_loss)+1, (len(val_loss))/4).tolist())
-    plt.legend()    
-    
-    fig_loss.set_facecolor('white')
-    fig_loss.savefig('loss_plot_log.png', bbox_inches='tight', dpi=300)
-    plt.show()
+    print("\nTraining and validation loss (log)")
+
+    fig, ax = plt.subplots()
+    ax.plot(range(1, len(train_loss) + 1), train_loss, label="Training loss")
+    ax.plot(range(1, len(val_loss) + 1), val_loss, label="Validation loss")
+
+    ax.set_yscale("log")
+    ax.set_title("Training and validation loss vs epoch number (log)")
+    ax.set_ylabel("Log Loss")
+    ax.set_xlabel("Epoch number")
+    ax.set_xticks(np.linspace(1, len(val_loss), 5).astype(int))
+    ax.legend()
+
+    fig.set_facecolor("white")
+    fig.tight_layout()
+    fig.savefig("loss_plot_log.png", bbox_inches="tight", dpi=300)
+    plt.show(block=False)
+    plt.pause(0.001)
+
+
 
 def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmentation_score):
     print("\n----------------------------------------------------------------------------")
     print("Segmentation metric trends over epochs")
 
     epochs = np.arange(1, len(f1_fibre) + 1)
-    fig_scores = plt.figure(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10, 5))
 
-    plt.plot(epochs, f1_fibre, label="F1 Fibre")
-    plt.plot(epochs, f1_axon, label="F1 Axon")
-    plt.plot(epochs, dice_score, label="Dice Score")
-    plt.plot(epochs, balanced_segmentation_score, label="Balanced Segmentation Score")
+    ax.plot(epochs, f1_fibre, label="F1 Fibre")
+    ax.plot(epochs, f1_axon, label="F1 Axon")
+    ax.plot(epochs, dice_score, label="Dice Score")
+    ax.plot(epochs, balanced_segmentation_score, label="Balanced Segmentation Score")
 
-    # Find best epoch (based on max balanced segmentation score)
     best_epoch = np.argmax(balanced_segmentation_score) + 1
     best_score = balanced_segmentation_score[best_epoch - 1]
 
-    # Draw vertical line at best epoch
-    plt.axvline(x=best_epoch, color='red', linestyle='--', label=f'Best Epoch: {best_epoch}')
-    plt.text(best_epoch + 0.5, 0.95, f'{best_score:.3f}', color='red')
+    ax.axvline(x=best_epoch, color='red', linestyle='--', label=f'Best Epoch: {best_epoch}')
+    ax.text(best_epoch + 0.5, 0.95, f'{best_score:.3f}', color='red')
 
-    plt.title("Segmentation Scores per Epoch")
-    plt.xlabel("Epoch")
-    plt.ylabel("Score")
-    plt.ylim(0, 1.05)
-    plt.xticks(ticks=np.linspace(1, len(f1_fibre), 5).astype(int))
-    plt.legend()
-    plt.grid(True)
-    fig_scores.set_facecolor('white')
-    plt.tight_layout()
+    ax.set_title("Segmentation Scores per Epoch")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Score")
+    ax.set_ylim(0, 1.05)
+    ax.set_xticks(np.linspace(1, len(f1_fibre), 5).astype(int))
+    ax.grid(True)
+    ax.legend()
 
-    plt.savefig("segmentation_scores_plot.png", bbox_inches='tight', dpi=300)
-    plt.show()
+    fig.set_facecolor('white')
+    fig.tight_layout()
+    fig.savefig("segmentation_scores_plot.png", bbox_inches='tight', dpi=300)
+    plt.show(block=False)
+    plt.pause(0.001)
+
 
 
 def plot_iou_distributions(df, label):
     """
-    Plot IoU/F1 distributions for each image.
+    Plot IoU/F1 distributions for each image using matplotlib (no seaborn).
 
     Args:
-        df (pd.DataFrame): DataFrame with metrics from evaluator.
-        label (str): Name of target type (e.g., Fibre or Axon).
+        df (pd.DataFrame): DataFrame with columns ['Image_Name', 'Threshold', 'F1'].
+        label (str): Type of label (e.g., "Fibre" or "Axon").
     """
-    plt.figure(figsize=(10, 5))
-    sns.lineplot(
-        data=df,
-        x="Threshold",
-        y="F1",
-        )
-    plt.title(f"{label} F1 Scores Across IoU Thresholds")
-    plt.grid(False)
-    plt.show()
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Group by image name and plot each line
+    grouped = df.groupby("Image_Name")
+    for name, group in grouped:
+        ax.plot(group["Threshold"], group["F1"], alpha=0.4, linewidth=1)
+
+    # Plot mean F1 line across images at each threshold
+    mean_f1 = df.groupby("Threshold")["F1"].mean()
+    ax.plot(mean_f1.index, mean_f1.values, label="Mean F1", color="black", linewidth=2)
+
+    ax.set_title(f"{label} F1 Scores Across IoU Thresholds")
+    ax.set_xlabel("IoU Threshold")
+    ax.set_ylabel("F1 Score")
+    ax.set_ylim(0, 1.05)
+    ax.legend()
+    ax.grid(True)
+
+    fig.tight_layout()
+    plt.savefig(f"{label.lower()}_iou_distribution.png", dpi=300, bbox_inches="tight")
+    plt.show(block=False)
+    plt.pause(0.001)
