@@ -1,15 +1,15 @@
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 import colorcet as cc
+
 mpl.use("TkAgg")
 
 def get_glasbey_cmap():
     l = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
     l[0] = [0, 0, 0]
-    return LinearSegmentedColormap.from_list('glasbey', l, N=256)
+    return LinearSegmentedColormap.from_list('glasbey', l, N=2048)
 
 def apply_cmap(image, cmap):
     if cmap == "glasbey":
@@ -53,7 +53,7 @@ def show_images(*images, titles=None, cmaps=None, n_cols=3, figsize=(15, 10)):
 
     fig.tight_layout()
     plt.show(block=False)
-    plt.pause(0.001)
+    plt.pause(0.01)
 
 
 def loss_plot_fn(train_loss, val_loss):
@@ -74,7 +74,7 @@ def loss_plot_fn(train_loss, val_loss):
     fig.tight_layout()
     fig.savefig('loss_plot.png', bbox_inches='tight', dpi=300)
     plt.show(block=False)
-    plt.pause(0.001)
+    plt.pause(0.01)
 
 
 def loss_plot_log_fn(train_loss, val_loss):
@@ -96,7 +96,7 @@ def loss_plot_log_fn(train_loss, val_loss):
     fig.tight_layout()
     fig.savefig("loss_plot_log.png", bbox_inches="tight", dpi=300)
     plt.show(block=False)
-    plt.pause(0.001)
+    plt.pause(0.01)
 
 
 
@@ -130,7 +130,7 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmenta
     fig.tight_layout()
     fig.savefig("segmentation_scores_plot.png", bbox_inches='tight', dpi=300)
     plt.show(block=False)
-    plt.pause(0.001)
+    plt.pause(0.01)
 
 
 
@@ -163,4 +163,4 @@ def plot_iou_distributions(df, label):
     fig.tight_layout()
     plt.savefig(f"{label.lower()}_iou_distribution.png", dpi=300, bbox_inches="tight")
     plt.show(block=False)
-    plt.pause(0.001)
+    plt.pause(0.01)
