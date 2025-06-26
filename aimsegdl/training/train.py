@@ -89,7 +89,8 @@ def train(config: TrainingConfig):
         t_loss = train_loop(train_loader, model, optimizer, loss_fns, scaler, device)
         train_loss.append(t_loss)
 
-        show_results_epochs = np.linspace(0, config.num_epochs - 1, 4, dtype=int)
+        show_results_epochs = [int(config.num_epochs * f) - 1 for f in [0.25, 0.5, 0.75, 1.0]]
+        show_results_epochs = sorted(set(min(max(e, 0), config.num_epochs - 1) for e in show_results_epochs))
         show_results = epoch in show_results_epochs
         v_loss, f1_fib, f1_ax, dice = evaluate_fn(val_loader, model, loss_fns, device, show_results)
         val_loss.append(v_loss)
