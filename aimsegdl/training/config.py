@@ -11,6 +11,9 @@ class TrainingConfig:
     image_width: int = 512
     pin_memory: bool = True
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    fibre_threshold: float=0.7
+    axon_threshold: float=0.5
+    min_diameter: float=15.0
     train_dir: str = "prepared_data/train_tiles/"
     val_dir: str = "prepared_data/val_tiles/"
     pretrained_weights: str = None      # Accepts either a path or model name (e.g., 'aimsegdl')
