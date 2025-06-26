@@ -145,9 +145,10 @@ def apply_semantic_segmentation_head_scriptable(pred: torch.Tensor):
 
 def segment_instances_from_sdt(
     distancemap: torch.Tensor,
-    threshold: float = 0.7,
-    min_size: int = 700,
-    compactness: float = 0.5
+    threshold: float = 0.5,
+    min_diameter: float = 15.0,
+    compactness: float = 0.5,
+    valid_mask: np.ndarray = None
 ) -> np.ndarray:
     """
     Segment instance regions (e.g., fibres or axons) from a skeleton-aware distance transform.
@@ -155,28 +156,36 @@ def segment_instances_from_sdt(
     Parameters:
         distancemap (torch.Tensor): Predicted distance map, shape (1, H, W) or (H, W).
         threshold (float): Threshold to define seed regions for watershed.
-        min_size (int): Minimum size (in pixels) to retain seeds.
+        min_diameter (float): Expected minimum object diameter (used to derive min_size for seeds).
         compactness (float): Compactness factor for the watershed algorithm.
+        valid_mask (np.ndarray, optional): Optional binary mask specifying where to restrict watershed.
 
     Returns:
         np.ndarray: Postprocessed label image.
     """
-    # Ensure NumPy array and remove singleton dimension
-    distancemap = distancemap.squeeze().detach().cpu().numpy()
+    # Convert to NumPy
+    distancemap_np = distancemap.squeeze().detach().cpu().numpy()
 
-    # Normalize map and define valid mask
-    mask_valid = distancemap >= 0
-    distancemap = np.clip(distancemap, 0, 1)
+    # Determine valid mask BEFORE clipping
+    if valid_mask is None:
+        valid_mask = distancemap_np >= 0  # areas with negative distance are considered background
 
-    # Create seed mask for watershed
-    seeds = np.logical_and(distancemap >= threshold, mask_valid)
+    # Clip the map to [0, 1]
+    distancemap_clipped = np.clip(distancemap_np, 0, 1)
+
+    # Estimate seed area from min_diameter (30% of diameter radius)
+    radius = 0.3 * min_diameter / 2
+    min_area = int(np.pi * radius ** 2)
+
+    # Generate seed mask
+    seed_mask = np.logical_and(distancemap_clipped >= threshold, valid_mask)
+    seeds = label(seed_mask)
+    seeds = remove_small_objects(seeds, min_size=min_area, connectivity=1)
     seeds = label(seeds)
-    seeds = remove_small_objects(seeds, min_size=min_size, connectivity=1)
-    seeds = label(seeds)
 
-    # Run watershed to separate instances
-    labels = watershed(-distancemap, seeds, mask=mask_valid, connectivity=1, compactness=compactness)
+    # Watershed
+    labels = watershed(-distancemap_clipped, markers=seeds, mask=valid_mask, connectivity=1, compactness=compactness)
 
-    # Fill potential holes inside each label
-    filled_labels = fill_labels(labels)
-    return filled_labels
+    # Fill holes in final labels
+    return fill_labels(labels)
+
