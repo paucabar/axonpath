@@ -48,6 +48,9 @@ def run_inference(
     model: torch.nn.Module,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     roi_size=(512, 512),
+    fibre_threshold: float=0.7,
+    axon_threshold: float=0.5,
+    min_diameter: float=15.0,
     sw_batch_size=1,
     overlap=0.5
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -69,6 +72,7 @@ def run_inference(
     """
     model.eval()
     model.to(device)
+    min_axon_diameter = min_diameter * 0.7
 
     # Prepare input
     input_tensor = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).float().to(device)  # [1, 1, H, W]
@@ -94,7 +98,7 @@ def run_inference(
     dt_fibre = prediction[3, :, :]
     dt_axon = prediction[4, :, :]
 
-    labels_fibre = segment_instances_from_sdt(dt_fibre)
-    labels_axon = segment_instances_from_sdt(dt_axon)
+    labels_fibre = segment_instances_from_sdt(dt_fibre, fibre_threshold, min_diameter)
+    labels_axon = segment_instances_from_sdt(dt_axon, axon_threshold, min_axon_diameter)
 
     return labels_fibre, labels_axon, semantic
