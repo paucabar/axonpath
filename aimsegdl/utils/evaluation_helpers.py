@@ -7,12 +7,13 @@ from aimsegdl.utils.image_processing import apply_semantic_segmentation_head, se
 from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
 
 
-def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
+def evaluate_fn(loader, model, loss_fn, device="cuda", fibre_threshold: float=0.7, axon_threshold: float=0.5, min_diameter: float=15.0, show_results: bool=False):
     model.eval()
     val_loss = []
     f1_scores_fibre = []
     f1_scores_axon = []
     dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False, num_classes = 3)
+    axon_min_diameter = min_diameter * 0.7
 
     with torch.no_grad():
         for x, y in loader:
@@ -42,8 +43,8 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
             # F1 Scores
             for i in range(x.shape[0]):
                 # Predicted instances
-                pred_fibre = segment_instances_from_sdt(prediction[i:i+1, 3, :, :])
-                pred_axon = segment_instances_from_sdt(prediction[i:i+1, 4, :, :])
+                pred_fibre = segment_instances_from_sdt(prediction[i:i+1, 3, :, :], fibre_threshold, min_diameter)
+                pred_axon = segment_instances_from_sdt(prediction[i:i+1, 4, :, :], axon_threshold, axon_min_diameter)
 
                 # Ground truth instances
                 gt_fibre = y[i, 0, :, :].cpu().numpy().astype(np.int32)  # assuming channel 0 is fibre
@@ -64,8 +65,8 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", show_results=False):
 
         if show_results:
             semantic = apply_semantic_segmentation_head(prediction[0:1, 0:3, :, :])
-            labels_fibre = segment_instances_from_sdt(prediction[0:1, 3, :, :])
-            labels_axon = segment_instances_from_sdt(prediction[0:1, 4, :, :])
+            labels_fibre = segment_instances_from_sdt(prediction[0:1, 3, :, :], fibre_threshold, min_diameter)
+            labels_axon = segment_instances_from_sdt(prediction[0:1, 4, :, :], axon_threshold, axon_min_diameter)
             show_images(
                 x[0].cpu(),
                 y[0, 0, :, :].cpu(),
