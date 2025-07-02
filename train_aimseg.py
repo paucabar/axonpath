@@ -9,51 +9,58 @@ from aimsegdl.data_preparation.data_preparation import create_train_val_test_spl
 def main():
     parser = argparse.ArgumentParser(description="Train AimSegDL model")
 
-    # Optional overrides for key parameters
-    parser.add_argument("--data_input", type=str, help="Input folder with raw datasets (default: datasets/)")
-    parser.add_argument("--data_output", type=str, help="Output folder for prepared tiles (default: prepared_data/)")
-    parser.add_argument('--create_test_split', action='store_true', default=True, help='Create test split')
-    parser.add_argument("--learning_rate", type=float, help="Learning rate")
-    parser.add_argument("--batch_size", type=int, help="Batch size")
-    parser.add_argument("--num_epochs", type=int, help="Number of epochs")
-    parser.add_argument("--num_workers", type=int, help="Number of data loading workers")
-    parser.add_argument("--image_height", type=int, help="Image height")
-    parser.add_argument("--image_width", type=int, help="Image width")
-    parser.add_argument("--fibre_threshold", type=float, help="Fibre threshold")
-    parser.add_argument("--axon_threshold", type=float, help="Axon threshold")
-    parser.add_argument("--min_diameter", type=float, help="Min diameter")
-    parser.add_argument("--pretrained_weights", type=str, help="Path to .pth weights file or model name (if available) to initialize model")
+    # Data preparation options
+    parser.add_argument("--data_input", type=str, default="datasets", help="Input folder with raw datasets")
+    parser.add_argument("--data_output", type=str, default="prepared_data", help="Output folder for prepared tiles")
+    parser.add_argument("--create_test_split", action="store_true", help="Create test split (default: False)")
+
+    # Training hyperparameters
+    parser.add_argument("--learning_rate", type=float, default=TrainingConfig.learning_rate, help="Learning rate")
+    parser.add_argument("--batch_size", type=int, default=TrainingConfig.batch_size, help="Batch size")
+    parser.add_argument("--num_epochs", type=int, default=TrainingConfig.num_epochs, help="Number of epochs")
+    parser.add_argument("--num_workers", type=int, default=TrainingConfig.num_workers, help="Number of data loading workers")
+    parser.add_argument("--image_height", type=int, default=TrainingConfig.image_height, help="Image height")
+    parser.add_argument("--image_width", type=int, default=TrainingConfig.image_width, help="Image width")
+
+    # Inference / segmentation parameters
+    parser.add_argument("--fibre_threshold", type=float, default=TrainingConfig.fibre_threshold, help="Fibre threshold for SDT")
+    parser.add_argument("--axon_threshold", type=float, default=TrainingConfig.axon_threshold, help="Axon threshold for SDT")
+    parser.add_argument("--min_diameter", type=float, default=TrainingConfig.min_diameter, help="Minimum object diameter")
+
+    # Model init / export
+    parser.add_argument("--pretrained_weights", type=str, default=None, help="Path to .pth file or model name")
     parser.add_argument("--load_checkpoint", action="store_true", help="Resume from checkpoint")
-    parser.add_argument("--bioimageio", action="store_true", help="Export BioImage.IO package")
-    parser.add_argument("--model_name", type=str, help="Name for saving model and logs")
+    parser.add_argument("--bioimageio", action="store_true", help="Export BioImage.IO model")
+    parser.add_argument("--model_name", type=str, default=TrainingConfig.model_name, help="Name for saving model and logs")
 
     args = parser.parse_args()
 
     # Data preparation
-    input_root = args.data_input or "datasets"
-    output_root = args.data_output or "prepared_data"
-    create_test_split=args.create_test_split
-    create_train_val_test_split_all(in_root=input_root, out_root=output_root, create_test_split=create_test_split)
+    create_train_val_test_split_all(
+        in_root=args.data_input,
+        out_root=args.data_output,
+        create_test_split=args.create_test_split
+    )
 
-    # Define training configuration
+    # Create training config
     config = TrainingConfig(
-        learning_rate=args.learning_rate if args.learning_rate is not None else TrainingConfig.learning_rate,
-        batch_size=args.batch_size if args.batch_size is not None else TrainingConfig.batch_size,
-        num_epochs=args.num_epochs if args.num_epochs is not None else TrainingConfig.num_epochs,
-        num_workers=args.num_workers if args.num_workers is not None else TrainingConfig.num_workers,
-        image_height=args.image_height if args.image_height is not None else TrainingConfig.image_height,
-        image_width=args.image_width if args.image_width is not None else TrainingConfig.image_width,
+        learning_rate=args.learning_rate,
+        batch_size=args.batch_size,
+        num_epochs=args.num_epochs,
+        num_workers=args.num_workers,
+        image_height=args.image_height,
+        image_width=args.image_width,
         pin_memory=True,
         device="cuda" if torch.cuda.is_available() else "cpu",
         fibre_threshold=args.fibre_threshold,
         axon_threshold=args.axon_threshold,
         min_diameter=args.min_diameter,
-        train_dir=f"{output_root}/train_tiles/",
-        val_dir=f"{output_root}/val_tiles/",
+        train_dir=f"{args.data_output}/train_tiles/",
+        val_dir=f"{args.data_output}/val_tiles/",
         pretrained_weights=args.pretrained_weights,
         load_checkpoint=args.load_checkpoint,
         bioimageio=args.bioimageio,
-        model_name=args.model_name if args.model_name else TrainingConfig.model_name,
+        model_name=args.model_name,
     )
 
     # Train
