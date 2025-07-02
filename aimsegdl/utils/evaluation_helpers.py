@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from monai.metrics import DiceMetric
 from aimsegdl.utils.visualization import show_images
-from aimsegdl.utils.image_processing import apply_semantic_segmentation_head, segment_instances_from_sdt
+from aimsegdl.utils.image_processing import apply_semantic_segmentation_head, segment_instances_from_sdt, map_axon_labels_to_fibres
 from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
 
 
@@ -43,8 +43,15 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", fibre_threshold: float=0.
             # F1 Scores
             for i in range(x.shape[0]):
                 # Predicted instances
-                pred_fibre = segment_instances_from_sdt(prediction[i:i+1, 3, :, :], fibre_threshold, min_diameter)
-                pred_axon = segment_instances_from_sdt(prediction[i:i+1, 4, :, :], axon_threshold, axon_min_diameter)
+                pred_fibre = segment_instances_from_sdt(distancemap=prediction[i:i+1, 3, :, :],
+                                                        threshold=fibre_threshold,
+                                                        min_diameter=min_diameter
+                                                        )
+                pred_axon = segment_instances_from_sdt(distancemap=prediction[i:i+1, 4, :, :],
+                                                       threshold=axon_threshold,
+                                                       min_diameter=axon_min_diameter
+                                                       )
+                pred_axon_assigned = map_axon_labels_to_fibres(pred_fibre, pred_axon)
 
                 # Ground truth instances
                 gt_fibre = y[i, 0, :, :].cpu().numpy().astype(np.int32)  # assuming channel 0 is fibre
@@ -52,7 +59,7 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", fibre_threshold: float=0.
 
                 # Evaluate each
                 evaluator_fibre = SegmentationEvaluator(gt_fibre, pred_fibre)
-                evaluator_axon = SegmentationEvaluator(gt_axon, pred_axon)
+                evaluator_axon = SegmentationEvaluator(gt_axon, pred_axon_assigned)
 
                 f1_fibre = evaluator_fibre.f1_mean(evaluator_fibre.evaluate_multiple_thresholds(f"sample_{i}_fibre"))
                 f1_axon = evaluator_axon.f1_mean(evaluator_axon.evaluate_multiple_thresholds(f"sample_{i}_axon"))
@@ -67,6 +74,7 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", fibre_threshold: float=0.
             semantic = apply_semantic_segmentation_head(prediction[0:1, 0:3, :, :])
             labels_fibre = segment_instances_from_sdt(prediction[0:1, 3, :, :], fibre_threshold, min_diameter)
             labels_axon = segment_instances_from_sdt(prediction[0:1, 4, :, :], axon_threshold, axon_min_diameter)
+            labels_axon_assigned = map_axon_labels_to_fibres(labels_fibre, labels_axon)
             show_images(
                 x[0].cpu(),
                 y[0, 0, :, :].cpu(),
@@ -76,7 +84,7 @@ def evaluate_fn(loader, model, loss_fn, device="cuda", fibre_threshold: float=0.
                 prediction[0, 4, :, :].cpu(),
                 semantic,
                 labels_fibre,
-                labels_axon,
+                labels_axon_assigned,
                 titles=[
                     "Image",  "Target Fibre", "Target Axon",
                     "Target Semantic", "Pred Fibre SDT", "Pred Axon SDT",

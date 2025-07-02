@@ -164,11 +164,18 @@ def segment_instances_from_sdt(
         np.ndarray: Postprocessed label image.
     """
     # Convert to NumPy
-    distancemap_np = distancemap.squeeze().detach().cpu().numpy()
+    if distancemap.ndim == 3:
+        distancemap_np = distancemap[0].detach().cpu().numpy()
+    elif distancemap.ndim == 2:
+        distancemap_np = distancemap.detach().cpu().numpy()
+    else:
+        raise ValueError(f"Unexpected distancemap shape: {distancemap.shape}")
+
 
     # Determine valid mask BEFORE clipping
-    if valid_mask is None:
-        valid_mask = distancemap_np >= 0  # areas with negative distance are considered background
+    if valid_mask is None or not isinstance(valid_mask, np.ndarray):
+        valid_mask = distancemap_np >= 0
+
 
     # Clip the map to [0, 1]
     distancemap_clipped = np.clip(distancemap_np, 0, 1)
@@ -189,3 +196,36 @@ def segment_instances_from_sdt(
     # Fill holes in final labels
     return fill_labels(labels)
 
+
+def map_axon_labels_to_fibres(label_img1: np.ndarray, label_img2: np.ndarray) -> np.ndarray:
+    """
+    Merge label_img2 fragments by assigning each to the label_img1 object it overlaps with most.
+
+    Parameters:
+        label_img1 (np.ndarray): Reference label image (e.g., fibres).
+        label_img2 (np.ndarray): Fragmented label image (e.g., axons).
+
+    Returns:
+        np.ndarray: New label image where label_img2 fragments are grouped by their best label_img1 match.
+    """
+    label_img1 = label_img1.astype(np.int32)
+    label_img2 = label_img2.astype(np.int32)
+
+    flat1 = label_img1.ravel()
+    flat2 = label_img2.ravel()
+
+    max_label1 = label_img1.max()
+    max_label2 = label_img2.max()
+
+    overlap_matrix, _, _ = np.histogram2d(flat1, flat2, bins=(max_label1 + 1, max_label2 + 1))
+
+    merged = np.zeros_like(label_img2, dtype=np.int32)
+
+    for l2 in range(1, max_label2 + 1):
+        overlaps = overlap_matrix[1:, l2]
+        if overlaps.sum() == 0:
+            continue
+        best_l1 = np.argmax(overlaps) + 1
+        merged[label_img2 == l2] = best_l1
+
+    return merged
