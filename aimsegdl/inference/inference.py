@@ -8,6 +8,7 @@ from aimsegdl.utils.image_processing import (
     normalize,
     segment_instances_from_sdt,
     apply_semantic_segmentation_head,
+    map_axon_labels_to_fibres,
 )
 
 
@@ -98,7 +99,11 @@ def run_inference(
     dt_fibre = prediction[3, :, :]
     dt_axon = prediction[4, :, :]
 
+    # Instance segmentation
     labels_fibre = segment_instances_from_sdt(dt_fibre, fibre_threshold, min_diameter)
     labels_axon = segment_instances_from_sdt(dt_axon, axon_threshold, min_axon_diameter)
 
-    return labels_fibre, labels_axon, semantic
+    # Axon mapping
+    mapped_axons = map_axon_labels_to_fibres(labels_fibre, labels_axon)
+
+    return labels_fibre, mapped_axons, semantic
