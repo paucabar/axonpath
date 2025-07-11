@@ -9,6 +9,7 @@ from aimsegdl.utils.image_processing import (
     segment_instances_from_sdt,
     apply_semantic_segmentation_head,
     map_axon_labels_to_fibres,
+    merge_unmatched_fibres,
 )
 
 
@@ -105,5 +106,6 @@ def run_inference(
 
     # Axon mapping
     mapped_axons = map_axon_labels_to_fibres(labels_fibre, labels_axon)
+    fibre_final = merge_unmatched_fibres(labels_fibre, mapped_axons)
 
-    return labels_fibre, mapped_axons, semantic
+    return fibre_final, mapped_axons, semantic

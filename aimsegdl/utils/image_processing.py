@@ -1,9 +1,10 @@
 import torch
 from scipy.ndimage import binary_fill_holes
 from skimage.measure import regionprops, label
-from skimage.segmentation import watershed
+from skimage.segmentation import watershed, find_boundaries
 from skimage.morphology import remove_small_objects
 import numpy as np
+import edt
 import torch.nn.functional as F
 
 
@@ -143,10 +144,10 @@ def apply_semantic_segmentation_head_scriptable(pred: torch.Tensor):
     return torch.argmax(F.softmax(pred, dim=1), dim=1)
 
 
-def segment_instances_from_sdt(
+def segment_instances_from_sdt_original(
     distancemap: torch.Tensor,
     threshold: float = 0.5,
-    min_diameter: float = 15.0,
+    min_diameter: float = 30.0,
     compactness: float = 0.5,
     valid_mask: np.ndarray = None
 ) -> np.ndarray:
@@ -172,10 +173,62 @@ def segment_instances_from_sdt(
         raise ValueError(f"Unexpected distancemap shape: {distancemap.shape}")
 
 
-    # Determine valid mask BEFORE clipping
+    # Determine valid mask
     if valid_mask is None or not isinstance(valid_mask, np.ndarray):
         valid_mask = distancemap_np >= 0
 
+    # Clip the map to [0, 1]
+    distancemap_clipped = np.clip(distancemap_np, 0, 1)
+
+    # Estimate seed area from min_diameter (30% of diameter radius)
+    radius = 0.3 * min_diameter / 2
+    min_area = int(np.pi * radius ** 2)
+
+    # Generate seed mask
+    seed_mask = np.logical_and(distancemap_clipped >= threshold, valid_mask)
+    seeds = label(seed_mask)
+    seeds = remove_small_objects(seeds, min_size=min_area, connectivity=1)
+    seeds = label(seeds)
+
+    # Watershed
+    labels = watershed(-distancemap_clipped, markers=seeds, mask=valid_mask, connectivity=1, compactness=compactness)
+
+    # Fill holes in final labels
+    return fill_labels(labels)
+
+
+def segment_instances_from_sdt(
+    distancemap: torch.Tensor,
+    threshold: float = 0.5,
+    min_diameter: float = 30.0,
+    compactness: float = 0.5,
+    valid_mask: np.ndarray = None
+) -> np.ndarray:
+    """
+    Segment instance regions (e.g., fibres or axons) from a skeleton-aware distance transform.
+
+    Parameters:
+        distancemap (torch.Tensor): Predicted distance map, shape (1, H, W) or (H, W).
+        threshold (float): Threshold to define seed regions for watershed.
+        min_diameter (float): Expected minimum object diameter (used to derive min_size for seeds).
+        compactness (float): Compactness factor for the watershed algorithm.
+        valid_mask (np.ndarray, optional): Optional binary mask specifying where to restrict watershed.
+
+    Returns:
+        np.ndarray: Postprocessed label image.
+    """
+    # Convert to NumPy
+    if distancemap.ndim == 3:
+        distancemap_np = distancemap[0].detach().cpu().numpy()
+    elif distancemap.ndim == 2:
+        distancemap_np = distancemap.detach().cpu().numpy()
+    else:
+        raise ValueError(f"Unexpected distancemap shape: {distancemap.shape}")
+
+
+    # Determine valid mask
+    if valid_mask is None or not isinstance(valid_mask, np.ndarray):
+        valid_mask = distancemap_np >= 0
 
     # Clip the map to [0, 1]
     distancemap_clipped = np.clip(distancemap_np, 0, 1)
@@ -229,3 +282,76 @@ def map_axon_labels_to_fibres(label_img1: np.ndarray, label_img2: np.ndarray) ->
         merged[label_img2 == l2] = best_l1
 
     return merged
+
+
+def merge_unmatched_fibres(
+    fibre_labels: np.ndarray,
+    mapped_axons: np.ndarray,
+    padding: int = 2,
+    max_merge_distance: float = 1.0
+) -> np.ndarray:
+    """
+    Reassign unmatched fibre labels to their closest matched fibre using local EDT comparison
+    within a padded bounding box.
+
+    Parameters:
+        fibre_labels (np.ndarray): Fibre instance label image.
+        mapped_axons (np.ndarray): Mapped axon label image (with fibre label IDs).
+        padding (int): Pixels to expand bounding box around unmatched fibre.
+        max_merge_distance (float): Maximum allowed edge-to-edge distance for merging.
+
+    Returns:
+        np.ndarray: Updated fibre label image with unmatched fibres reassigned.
+    """
+    output = fibre_labels.copy()
+    height, width = fibre_labels.shape
+
+    # Determine matched and unmatched fibre labels
+    matched_labels = np.unique(mapped_axons)
+    matched_labels = matched_labels[matched_labels != 0]
+    all_labels = np.unique(fibre_labels)
+    unmatched_labels = [l for l in all_labels if l != 0 and l not in matched_labels]
+
+    # Precompute matched fibre edge masks
+    matched_edge_masks = {
+        label_val: find_boundaries(fibre_labels == label_val, mode="outer")
+        for label_val in matched_labels
+    }
+
+    # Process unmatched fibres
+    for uid in unmatched_labels:
+        region_mask = fibre_labels == uid
+        edge_unmatched = find_boundaries(region_mask, mode="outer")
+
+        y_coords, x_coords = np.where(region_mask)
+        y_min = max(0, y_coords.min() - padding)
+        y_max = min(height, y_coords.max() + padding + 1)
+        x_min = max(0, x_coords.min() - padding)
+        x_max = min(width, x_coords.max() + padding + 1)
+
+        cropped_edge_unmatched = edge_unmatched[y_min:y_max, x_min:x_max]
+        edt_mask = np.ones_like(cropped_edge_unmatched, dtype=bool)
+        edt_mask[cropped_edge_unmatched] = False
+        local_dist_map = edt.edt(edt_mask)
+
+        best_label = None
+        best_distance = np.inf
+
+        for mid, edge_mask in matched_edge_masks.items():
+            cropped_edge = edge_mask[y_min:y_max, x_min:x_max]
+            if not np.any(cropped_edge):
+                continue
+
+            distances = local_dist_map[cropped_edge]
+            if distances.size == 0:
+                continue
+
+            min_dist = np.min(distances)
+            if min_dist < best_distance:
+                best_distance = min_dist
+                best_label = mid
+
+        if best_label is not None and best_distance <= max_merge_distance:
+            output[region_mask] = best_label
+
+    return output
