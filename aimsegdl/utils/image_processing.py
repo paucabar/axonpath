@@ -298,7 +298,7 @@ def merge_unmatched_fibres(
         fibre_labels (np.ndarray): Fibre instance label image.
         mapped_axons (np.ndarray): Mapped axon label image (with fibre label IDs).
         padding (int): Pixels to expand bounding box around unmatched fibre.
-        max_merge_distance (float): Maximum allowed edge-to-edge distance for merging.
+        max_merge_distance (float): Max allowed edge-to-edge distance for merging.
 
     Returns:
         np.ndarray: Updated fibre label image with unmatched fibres reassigned.
@@ -306,52 +306,48 @@ def merge_unmatched_fibres(
     output = fibre_labels.copy()
     height, width = fibre_labels.shape
 
-    # Determine matched and unmatched fibre labels
     matched_labels = np.unique(mapped_axons)
     matched_labels = matched_labels[matched_labels != 0]
     all_labels = np.unique(fibre_labels)
     unmatched_labels = [l for l in all_labels if l != 0 and l not in matched_labels]
 
-    # Precompute matched fibre edge masks
-    matched_edge_masks = {
-        label_val: find_boundaries(fibre_labels == label_val, mode="outer")
-        for label_val in matched_labels
-    }
-
-    # Process unmatched fibres
     for uid in unmatched_labels:
-        region_mask = fibre_labels == uid
-        edge_unmatched = find_boundaries(region_mask, mode="outer")
-
-        y_coords, x_coords = np.where(region_mask)
+        full_mask = fibre_labels == uid
+        y_coords, x_coords = np.where(full_mask)
         y_min = max(0, y_coords.min() - padding)
         y_max = min(height, y_coords.max() + padding + 1)
         x_min = max(0, x_coords.min() - padding)
         x_max = min(width, x_coords.max() + padding + 1)
 
-        cropped_edge_unmatched = edge_unmatched[y_min:y_max, x_min:x_max]
-        edt_mask = np.ones_like(cropped_edge_unmatched, dtype=bool)
-        edt_mask[cropped_edge_unmatched] = False
+        # Crop region
+        cropped_labels = fibre_labels[y_min:y_max, x_min:x_max]
+        region_mask = cropped_labels == uid
+        edge_unmatched = find_boundaries(region_mask, mode="outer")
+
+        # EDT of unmatched edge
+        edt_mask = np.ones_like(region_mask, dtype=bool)
+        edt_mask[edge_unmatched] = False
         local_dist_map = edt.edt(edt_mask)
+
+        # Nearby matched fibres in cropped region
+        nearby_labels = np.unique(cropped_labels)
+        candidate_labels = [l for l in nearby_labels if l in matched_labels and l != uid]
 
         best_label = None
         best_distance = np.inf
 
-        for mid, edge_mask in matched_edge_masks.items():
-            cropped_edge = edge_mask[y_min:y_max, x_min:x_max]
-            if not np.any(cropped_edge):
-                continue
-
-            distances = local_dist_map[cropped_edge]
+        for mid in candidate_labels:
+            matched_mask = cropped_labels == mid
+            matched_edge = find_boundaries(matched_mask, mode="outer")
+            distances = local_dist_map[matched_edge]
             if distances.size == 0:
                 continue
-
             min_dist = np.min(distances)
             if min_dist < best_distance:
                 best_distance = min_dist
                 best_label = mid
 
         if best_label is not None and best_distance <= max_merge_distance:
-            output[region_mask] = best_label
+            output[y_min:y_max, x_min:x_max][region_mask] = best_label
 
     return output
