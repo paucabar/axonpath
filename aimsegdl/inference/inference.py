@@ -1,4 +1,6 @@
 import torch
+import os
+from pathlib import Path
 import numpy as np
 from typing import Tuple
 from skimage.io import imread
@@ -25,21 +27,58 @@ def load_torchscript_model(model_path: str, device: str = "cuda" if torch.cuda.i
     model.eval()
     return model
 
+def resolve_model_path(model_identifier: str) -> str:
+    """
+    Resolve a model path for inference.
+
+    - First, try loading a built-in pretrained weight from `aimsegdl.weights`.
+    - If not found, fall back to the provided path.
+
+    Args:
+        model_identifier (str): Name or path to the model weights (.pth file).
+
+    Returns:
+        str: Resolved absolute path to the weights.
+
+    Raises:
+        FileNotFoundError: If the file cannot be found.
+    """
+
+    # Try package weights first
+    try:
+        import pkg_resources
+        return pkg_resources.resource_filename("aimsegdl.weights", model_identifier + ".pth")
+    except Exception:
+        pass
+
+    # Then try direct path
+    if os.path.isfile(model_identifier):
+        return model_identifier
+
+    # Try dev path
+    dev_path = Path(__file__).resolve().parent.parent / "weights" / (model_identifier + ".pth")
+    if dev_path.is_file():
+        return str(dev_path)
+
+    raise FileNotFoundError(f"Model weights not found for: {model_identifier}")
+
 
 def load_model(model_path: str, device: str = "cuda" if torch.cuda.is_available() else "cpu") -> torch.nn.Module:
     """
-    Load a PyTorch model from a .pth file.
+    Load a PyTorch model from a resolved path (supports built-in weight names).
 
     Args:
-        model_path (str): Path to the .pth file containing model weights.
+        model_path (str): Path or name of the model weights (.pth).
         device (str): Device to load the model onto.
 
     Returns:
         torch.nn.Module: The loaded model in eval mode.
     """
-    # Instantiate model
+    # Resolve full path
+    resolved_path = resolve_model_path(model_path)
+
     model = model_fn(device=device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.load_state_dict(torch.load(resolved_path, map_location=device))
     model.to(device)
     model.eval()
     return model
@@ -50,9 +89,9 @@ def run_inference(
     model: torch.nn.Module,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     roi_size=(512, 512),
-    fibre_threshold: float=0.7,
+    fibre_threshold: float=0.5,
     axon_threshold: float=0.5,
-    min_diameter: float=15.0,
+    min_diameter: float=30.0,
     sw_batch_size=1,
     overlap=0.5
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -106,6 +145,8 @@ def run_inference(
 
     # Axon mapping
     mapped_axons = map_axon_labels_to_fibres(labels_fibre, labels_axon)
+
+    #Fibre correction
     fibre_final = merge_unmatched_fibres(labels_fibre, mapped_axons)
 
     return fibre_final, mapped_axons, semantic
