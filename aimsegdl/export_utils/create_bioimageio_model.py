@@ -14,10 +14,11 @@ from bioimageio.spec.model.v0_5 import (
     AxisId, BatchAxis, ChannelAxis, SpaceInputAxis, SpaceOutputAxis,
     FileDescr, IntervalOrRatioDataDescr, SizeReference,
     ParameterizedSize, TorchscriptWeightsDescr, WeightsDescr,
-    CiteEntry, Doi, Identifier
+    CiteEntry, Doi, Identifier, generate_covers
 )
 from bioimageio.spec import save_bioimageio_package
 from bioimageio.core import test_model
+
 
 
 def write_readme(model_name: str, output_dir: str) -> str:
@@ -63,60 +64,96 @@ def export_bioimageio(
     img = np.array(Image.open(test_img_path)).astype(np.float32)
     input_ = normalize(img)[None, None]  # [1, 1, H, W]
     input_tensor = torch.from_numpy(input_)
-    crop = input_tensor[:, :, :512, :512]  # Crop for scripting
+    #crop = input_tensor[:, :, :512, :512]  # Crop for scripting
 
     # Script and save TorchScript model
-    scripted_model = torch.jit.script(wrapped_model, crop)
+    scripted_model = torch.jit.script(wrapped_model, input_tensor)
     torch.jit.save(scripted_model, os.path.join(output_dir, "weights.pt"))
 
     # Save test input and output
-    np.save(os.path.join(output_dir, "test-input.npy"), crop.numpy())
+    #np.save(os.path.join(output_dir, "test-input.npy"), input_tensor.numpy())
+    #with torch.no_grad():
+    #    output = scripted_model(input_tensor)
+    #np.save(os.path.join(output_dir, "test-output.npy"), output.cpu().numpy())
+
+    # Save test input and output
+    np.save(os.path.join(output_dir, "test-input.npy"), input_tensor.detach().cpu().numpy())
     with torch.no_grad():
-        output = scripted_model(crop)
-    np.save(os.path.join(output_dir, "test-output.npy"), output.cpu().numpy())
+        output = scripted_model(input_tensor)
+
+    # Ensure it's raw NumPy, not xarray or torch tensor
+    output_np = output.detach().cpu().numpy().astype(np.float32)
+
+    # Avoid fancy indexing issues — make sure it's a plain ndarray
+    assert isinstance(output_np, np.ndarray) and output_np.ndim == 4
+
+    np.save(os.path.join(output_dir, "test-output.npy"), output_np)
+
+    print("input:", input_tensor.shape)
+    print("output:", output.shape)
+    print("output dtype:", output.dtype)
+    print("Output sample values:", output_np.flatten()[::1000][:10])
+    print("semantic unique:", np.unique(output[0:1, 0:1, :, :]), "dtype", output[0:1, 0:1, :, :].dtype)
+    print("dt_fibre unique:", np.unique(output[0:1, 1:2, :, :]), "dtype", output[0:1, 1:2, :, :].dtype)
+    print("dt_axon unique:", np.unique(output[0:1, 2:3, :, :]), "dtype", output[0:1, 2:3, :, :].dtype)
+    print("test-input-shape", np.load("bioimageio_model/test-input.npy").shape)
+    print("test-output-shape", np.load("bioimageio_model/test-output.npy").shape)
+
+    # Confirm similarity
+    expected = output.cpu().numpy()
+    predicted = np.load("bioimageio_model/test-output.npy")
+
+    np.testing.assert_allclose(expected, predicted, rtol=1e-3, atol=1e-3)
+    assert input_tensor.shape[2:] == output.shape[2:], "Input/output shape mismatch!"
+
 
     # Write README inside output_dir
     readme_filename = write_readme(model_name, output_dir)
 
-    # Build RDF (Model Description)
+    # Model pixel size
+    model_pixel_size = 0.008 # TODO: add as argument (temp fixed for EM-CNS)
+
+    # Define input
     input_descr = InputTensorDescr(
         id=TensorId("raw"),
         axes=[
             BatchAxis(),
-            ChannelAxis(id=AxisId("c"), channel_names=[Identifier("gray")]),
-            SpaceInputAxis(id=AxisId("y"), size=ParameterizedSize(min=32, step=1)),
-            SpaceInputAxis(id=AxisId("x"), size=ParameterizedSize(min=32, step=1)),
+            ChannelAxis(id=AxisId("channel"), channel_names=[Identifier("gray")]),
+            SpaceInputAxis(id=AxisId("y"), size=ParameterizedSize(min=512, step=1), scale=model_pixel_size, unit="micrometer"),
+            SpaceInputAxis(id=AxisId("x"), size=ParameterizedSize(min=512, step=1), scale=model_pixel_size, unit="micrometer"),
         ],
         data=IntervalOrRatioDataDescr(type="float32"),
-        test_tensor=FileDescr(source="test-input.npy")
+        test_tensor=FileDescr(source=os.path.join(output_dir, "test-input.npy"))
     )
 
+    # Define output
     output_descr = OutputTensorDescr(
         id=TensorId("prediction"),
         axes=[
             BatchAxis(),
             ChannelAxis(
-                id=AxisId("c"),
+                id=AxisId("channel"),
                 channel_names=[
                     Identifier("semantic_class_index"),
                     Identifier("fibre_distance"),
                     Identifier("axon_distance")
-                ]
+                ],
             ),
-            SpaceOutputAxis(id=AxisId("y"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("y"))),
-            SpaceOutputAxis(id=AxisId("x"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("x"))),
+            SpaceOutputAxis(id=AxisId("y"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("y")), scale=model_pixel_size, unit="micrometer"),
+            SpaceOutputAxis(id=AxisId("x"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("x")), scale=model_pixel_size, unit="micrometer"),
         ],
-        test_tensor=FileDescr(source="test-output.npy")
+        test_tensor=FileDescr(source=os.path.join(output_dir, "test-output.npy"))
     )
+
 
     model_descr = ModelDescr(
         name=model_name,
         version="0.1.0",
         description="AimSegDL TorchScript model for axon/fibre segmentation.",
-        authors=[Author(name="Pau Carrillo-Barberà")],
+        authors=[Author(name="Pau Carrillo-Barberà")], # TODO: update author list
         license=LicenseId("CC-BY-4.0"),
         documentation=RelativeFilePath(Path(output_dir).name + "/" + readme_filename),
-        covers=["cover.png"],  # optional; can skip if not present
+        #covers=[cover_path],
         git_repo=HttpUrl("https://github.com/paucabar/aimseg-dl"),
         inputs=[input_descr],
         outputs=[output_descr],
@@ -135,5 +172,5 @@ def export_bioimageio(
     print("Saved model package:", package_path)
 
     # Validate RDF + package
-    summary = test_model(model_descr)
+    summary = test_model(model_descr, weight_format="torchscript", test_tolerance=1e-2)
     summary.display()

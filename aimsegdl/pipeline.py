@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from aimsegdl.utils.image_processing import apply_semantic_segmentation_head_scriptable
 
+def pad_to_multiple(x: int, multiple: int) -> int:
+    return (multiple - x % multiple) % multiple
 
 class Pipeline(nn.Module):
     """
@@ -18,35 +20,39 @@ class Pipeline(nn.Module):
         self.target_height = 512
         self.target_width = 512
 
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass with padding, inference, semantic head, and unpadding.
+        b, c, orig_h, orig_w = x.shape  # Save original input size
 
-        Args:
-            x (torch.Tensor): Input tensor of shape (B, C, H, W)
+        # Enforce minimum size (e.g. 512) before padding to multiple of 32
+        padded_h = max(orig_h, self.target_height)
+        padded_w = max(orig_w, self.target_width)
 
-        Returns:
-            torch.Tensor: Output tensor after postprocessing (1, C_out, H, W)
-        """
-        b, c, h, w = x.shape
-        pad_h = max(0, self.target_height - h)
-        pad_w = max(0, self.target_width - w)
+        # Compute padding to reach next multiple of 32
+        pad_h = pad_to_multiple(padded_h, 32)
+        pad_w = pad_to_multiple(padded_w, 32)
 
-        # Pad input
-        x = F.pad(x, (0, pad_w, 0, pad_h), mode='constant')
+        final_h = padded_h + pad_h
+        final_w = padded_w + pad_w
 
-        # Model forward
-        pred = self.model(x)
+        # Pad image (right and bottom only)
+        x = F.pad(x, (0, final_w - orig_w, 0, final_h - orig_h), mode='constant')  # [B, C, H_pad, W_pad]
 
-        # Semantic segmentation postprocessing
-        semantic = apply_semantic_segmentation_head_scriptable(pred[:, 0:3, :, :])
-        dt_fibre = pred[:, 3, :, :]
-        dt_axon = pred[:, 4, :, :]
+        # Forward through model
+        pred = self.model(x)  # [B, 5, H_pad, W_pad]
 
-        # Combine all outputs
-        output = torch.cat((semantic, dt_fibre, dt_axon), dim=0).unsqueeze(0)
+        # Apply semantic segmentation head
+        semantic = apply_semantic_segmentation_head_scriptable(pred[:, 0:3, :, :]).unsqueeze(1).to(dtype=pred.dtype)
+        dt_fibre = pred[:, 3:4, :, :]
+        dt_axon = pred[:, 4:5, :, :]
 
-        # Remove padding
-        output = output[:, :, :h, :w]
+        # Combine outputs
+        output = torch.cat([semantic, dt_fibre, dt_axon], dim=1)
+
+        # Crop to original input size
+        output = output[:, :, :orig_h, :orig_w]
 
         return output.float()
+
+
+
