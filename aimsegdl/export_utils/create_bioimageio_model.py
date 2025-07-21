@@ -9,12 +9,29 @@ from aimsegdl.pipeline import Pipeline
 from aimsegdl.utils.image_processing import normalize
 
 from bioimageio.spec.model.v0_5 import (
-    ModelDescr, Author, LicenseId, RelativeFilePath,
-    HttpUrl, InputTensorDescr, OutputTensorDescr, TensorId,
-    AxisId, BatchAxis, ChannelAxis, SpaceInputAxis, SpaceOutputAxis,
-    FileDescr, IntervalOrRatioDataDescr, SizeReference,
-    ParameterizedSize, TorchscriptWeightsDescr, WeightsDescr,
-    CiteEntry, Doi, Identifier, generate_covers
+    ModelDescr,
+    Author,
+    LicenseId,
+    RelativeFilePath,
+    HttpUrl,
+    InputTensorDescr,
+    OutputTensorDescr,
+    TensorId,
+    AxisId,
+    BatchAxis,
+    ChannelAxis,
+    SpaceInputAxis,
+    SpaceOutputAxis,
+    FileDescr,
+    IntervalOrRatioDataDescr,
+    SizeReference,
+    ParameterizedSize,
+    TorchscriptWeightsDescr,
+    WeightsDescr,
+    CiteEntry,
+    Doi,
+    Identifier,
+    generate_covers,
 )
 from bioimageio.spec import save_bioimageio_package
 from bioimageio.core import test_model
@@ -69,12 +86,6 @@ def export_bioimageio(
     # Script and save TorchScript model
     scripted_model = torch.jit.script(wrapped_model, input_tensor)
     torch.jit.save(scripted_model, os.path.join(output_dir, "weights.pt"))
-
-    # Save test input and output
-    #np.save(os.path.join(output_dir, "test-input.npy"), input_tensor.numpy())
-    #with torch.no_grad():
-    #    output = scripted_model(input_tensor)
-    #np.save(os.path.join(output_dir, "test-output.npy"), output.cpu().numpy())
 
     # Save test input and output
     np.save(os.path.join(output_dir, "test-input.npy"), input_tensor.detach().cpu().numpy())
@@ -145,7 +156,34 @@ def export_bioimageio(
         test_tensor=FileDescr(source=os.path.join(output_dir, "test-output.npy"))
     )
 
+    # Create an output descriptor that can be matched by a cover
+    output_descr_cover = OutputTensorDescr(
+        id=TensorId("prediction"),
+        axes=[
+            ChannelAxis(
+                id=AxisId("channel"),
+                channel_names=[Identifier("fibre_ditancemap")],  # only one channel now
+            ),
+            SpaceOutputAxis(id=AxisId("y"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("y")), scale=model_pixel_size, unit="micrometer"),
+            SpaceOutputAxis(id=AxisId("x"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("x")), scale=model_pixel_size, unit="micrometer"),
+        ],
+        test_tensor=FileDescr(source=os.path.join(output_dir, "test-output.npy"))
+)
 
+    # Generate a cover for the bioimageio model
+    covers = generate_covers(
+        inputs=[(input_descr, input_)],
+        outputs=[(output_descr_cover, output_np[0, 1:2, :, :])]
+    )
+
+    # Save the first cover
+    cover_path = os.path.join(output_dir, "cover.png")
+
+    import shutil
+    shutil.copy(covers[0], cover_path)
+
+
+    #Define model
     model_descr = ModelDescr(
         name=model_name,
         version="0.1.0",
@@ -153,7 +191,7 @@ def export_bioimageio(
         authors=[Author(name="Pau Carrillo-Barberà")], # TODO: update author list
         license=LicenseId("CC-BY-4.0"),
         documentation=RelativeFilePath(Path(output_dir).name + "/" + readme_filename),
-        #covers=[cover_path],
+        covers=[cover_path],
         git_repo=HttpUrl("https://github.com/paucabar/aimseg-dl"),
         inputs=[input_descr],
         outputs=[output_descr],
