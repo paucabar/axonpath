@@ -114,7 +114,7 @@ def split_tiles(tiles, create_test_split=True):
 
 
 
-def create_train_val_test_split_all(in_root, out_root, fix_label_padding=True, create_test_split=True):
+def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=True):
     os.makedirs(out_root, exist_ok=True)
     summary_records = []
     tile_records = []
