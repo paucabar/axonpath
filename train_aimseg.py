@@ -30,7 +30,6 @@ def main():
     # Model init / export
     parser.add_argument("--pretrained_weights", type=str, default=None, help="Path to .pth file or model name")
     parser.add_argument("--load_checkpoint", action="store_true", help="Resume from checkpoint")
-    parser.add_argument("--bioimageio", action="store_true", help="Export BioImage.IO model")
     parser.add_argument("--model_name", type=str, default=TrainingConfig.model_name, help="Name for saving model and logs")
 
     args = parser.parse_args()
@@ -59,7 +58,6 @@ def main():
         val_dir=f"{args.data_output}/val_tiles/",
         pretrained_weights=args.pretrained_weights,
         load_checkpoint=args.load_checkpoint,
-        bioimageio=args.bioimageio,
         model_name=args.model_name,
     )
 

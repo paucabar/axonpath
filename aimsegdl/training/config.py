@@ -18,5 +18,4 @@ class TrainingConfig:
     val_dir: str = "prepared_data/val_tiles/"
     pretrained_weights: str = None      # Accepts either a path or model name (e.g., 'aimsegdl')
     load_checkpoint: bool = False       # Resume from checkpoint (hidden feature)
-    bioimageio: bool = False
     model_name: str = "aimsegdl"

@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
 import os
 from pathlib import Path
 import pkg_resources
@@ -12,6 +11,7 @@ from aimsegdl.utils import (
 )
 from aimsegdl.training.train_loop import train_loop
 from aimsegdl.training.config import TrainingConfig
+from aimsegdl.export_utils.model_export import export_torchscript_model
 
 
 try:
@@ -125,12 +125,7 @@ def train(config: TrainingConfig):
     loss_plot_log_fn(train_loss, val_loss)
     plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_seg_score)
 
-    # Export logic
+    # Export torchscript model
     export_model = model_fn(config.device)
     export_model.load_state_dict(torch.load(f"best_weights_model.pth"))
-    if config.bioimageio:
-        from aimsegdl.export_utils.model_export import export_bioimageio
-        export_bioimageio(export_model, config.model_name + "_bioimageio", True, r"data_tem/test_images/P03B_Frame6_t0.tif")
-    else:
-        from aimsegdl.export_utils.model_export import export_torchscript_model
-        export_torchscript_model(export_model, config.model_name + ".pt")
+    export_torchscript_model(export_model, config.model_name + ".pt")
