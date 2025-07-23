@@ -4,13 +4,12 @@ import torch
 from PIL import Image
 from pathlib import Path
 import matplotlib.cm as cm
-
+from scipy.ndimage import binary_fill_holes
 
 from aimsegdl.inference.inference import load_model
 from aimsegdl.pipeline import Pipeline
 from aimsegdl.utils.image_processing import normalize, segment_instances_from_sdt, map_axon_labels_to_fibres
 from aimsegdl.export_utils.config import BioimageioExportConfig
-from aimsegdl.utils.visualization import get_glasbey_cmap, apply_cmap
 
 from bioimageio.spec.model.v0_5 import (
     ModelDescr,
@@ -89,17 +88,17 @@ def generate_and_save_custom_cover(
 
     # Ensure semantic is class index (0, 1, 2)
     semantic_classes = semantic_logits.cpu().numpy()
-    print("unique semantic cover", np.unique(semantic_classes))
+
+    # Fill holes in semantic label 2
+    label_2_mask = (semantic_classes == 2)
+    filled_label_2 = binary_fill_holes(label_2_mask)
+    semantic_classes[(semantic_classes != 2) & filled_label_2] = 2
 
     # Get colormapped RGB versions (values expected in [0, N] range)
     gray_rgb = cm.get_cmap("gray")(gray)[..., :3]
     semantic_rgb = cm.get_cmap("viridis")(semantic_classes / 2.0)[..., :3]
     fibre_rgb = cm.get_cmap("nipy_spectral")(fibre)[..., :3]
     axon_rgb = cm.get_cmap("nipy_spectral")(axon_mapped)[..., :3]
-    
-    # Alternatively, use glasbey for instances
-    #fibre_rgb, _ = apply_cmap(fibre, cmap="glasbey")
-    #axon_rgb, _ = apply_cmap(axon, cmap="glasbey")
 
     # Stack all full-sized images into a blank canvas
     H, W = gray.shape
