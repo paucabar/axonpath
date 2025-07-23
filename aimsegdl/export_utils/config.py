@@ -5,8 +5,9 @@ from typing import List, Optional
 class BioimageioExportConfig:
     model_path: str                    # Path to .pth or .pt file
     model_name: str                    # Used as name of model package
+    model_version: str                 # Current version of the model
     test_img_path: str                 # Input image for generating test input/output
-    output_dir: str = "bioimageio_model"  # Exported model directory
+    output_dir: str                      # Exported model directory
     model_pixel_size: float               # µm per pixel
     readme_text: Optional[str] = None      # Optional custom README text
     cover_image: Optional[str] = None      # Optional manual cover path override
