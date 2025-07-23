@@ -3,11 +3,14 @@ import numpy as np
 import torch
 from PIL import Image
 from pathlib import Path
+import matplotlib.cm as cm
+
 
 from aimsegdl.inference.inference import load_model
 from aimsegdl.pipeline import Pipeline
-from aimsegdl.utils.image_processing import normalize
+from aimsegdl.utils.image_processing import normalize, segment_instances_from_sdt, map_axon_labels_to_fibres
 from aimsegdl.export_utils.config import BioimageioExportConfig
+from aimsegdl.utils.visualization import get_glasbey_cmap, apply_cmap
 
 from bioimageio.spec.model.v0_5 import (
     ModelDescr,
@@ -32,11 +35,9 @@ from bioimageio.spec.model.v0_5 import (
     CiteEntry,
     Doi,
     Identifier,
-    generate_covers,
 )
 from bioimageio.spec import save_bioimageio_package
 from bioimageio.core import test_model
-
 
 
 def write_readme(model_name: str, output_dir: str) -> str:
@@ -57,6 +58,65 @@ def write_readme(model_name: str, output_dir: str) -> str:
     return readme_filename
 
 
+def generate_and_save_custom_cover(
+    input_image: np.ndarray,
+    output_tensor: torch.Tensor,
+    save_path: str
+):
+    """
+    Creates a 4-panel side-by-side cover image:
+    - Region 1: Input grayscale (gray colormap)
+    - Region 2: Semantic prediction (argmax, viridis colormap)
+    - Region 3: Fibre distance (nipy_spectral after instance segmentation)
+    - Region 4: Axon distance (nipy_spectral after instance segmentation)
+
+    The output has the same height and width as the original image.
+
+    Args:
+        input_image (np.ndarray): Shape [1, 1, H, W]
+        output_tensor (torch.Tensor): Shape [1, 3, H, W]
+        save_path (str): File path to save the composite cover image
+    """
+    assert input_image.ndim == 4 and input_image.shape[1] == 1, "Expected input shape [1, 1, H, W]"
+    assert output_tensor.ndim == 4 and output_tensor.shape[1] == 3, "Expected output shape [1, 3, H, W]"
+
+    # Extract images
+    gray = input_image[0, 0]
+    semantic_logits = output_tensor[0, 0]
+    fibre = segment_instances_from_sdt(output_tensor[0, 1])
+    axon = segment_instances_from_sdt(output_tensor[0, 2])
+    axon_mapped = map_axon_labels_to_fibres(fibre, axon)
+
+    # Ensure semantic is class index (0, 1, 2)
+    semantic_classes = semantic_logits.cpu().numpy()
+    print("unique semantic cover", np.unique(semantic_classes))
+
+    # Get colormapped RGB versions (values expected in [0, N] range)
+    gray_rgb = cm.get_cmap("gray")(gray)[..., :3]
+    semantic_rgb = cm.get_cmap("viridis")(semantic_classes / 2.0)[..., :3]
+    fibre_rgb = cm.get_cmap("nipy_spectral")(fibre)[..., :3]
+    axon_rgb = cm.get_cmap("nipy_spectral")(axon_mapped)[..., :3]
+    
+    # Alternatively, use glasbey for instances
+    #fibre_rgb, _ = apply_cmap(fibre, cmap="glasbey")
+    #axon_rgb, _ = apply_cmap(axon, cmap="glasbey")
+
+    # Stack all full-sized images into a blank canvas
+    H, W = gray.shape
+    panel_width = W // 4
+    canvas = np.zeros((H, W, 3), dtype=np.float32)
+
+    # Assign each panel to a quarter region
+    canvas[:, 0 * panel_width:1 * panel_width] = gray_rgb[:, 0 * panel_width:1 * panel_width]
+    canvas[:, 1 * panel_width:2 * panel_width] = fibre_rgb[:, 1 * panel_width:2 * panel_width]
+    canvas[:, 2 * panel_width:3 * panel_width] = semantic_rgb[:, 2 * panel_width:3 * panel_width]
+    canvas[:, 3 * panel_width:4 * panel_width] = axon_rgb[:, 3 * panel_width:4 * panel_width]
+
+    # Save final image
+    Image.fromarray((canvas * 255).astype(np.uint8)).save(save_path)
+    print(f"Custom cover saved to {save_path}")
+
+
 def export_bioimageio(config: BioimageioExportConfig):
     """
     Export AimSegDL TorchScript model to a BioImage.IO package.
@@ -72,7 +132,6 @@ def export_bioimageio(config: BioimageioExportConfig):
     img = np.array(Image.open(config.test_img_path)).astype(np.float32)
     input_ = normalize(img)[None, None]  # [1, 1, H, W]
     input_tensor = torch.from_numpy(input_)
-    #crop = input_tensor[:, :, :512, :512]  # Crop for scripting
 
     # Script and save TorchScript model
     scripted_model = torch.jit.script(wrapped_model, input_tensor)
@@ -143,31 +202,12 @@ def export_bioimageio(config: BioimageioExportConfig):
         test_tensor=FileDescr(source=os.path.join(config.output_dir, "test-output.npy"))
     )
 
-    # Define output matching cover
-    output_descr_cover = OutputTensorDescr(
-        id=TensorId("prediction"),
-        axes=[
-            ChannelAxis(
-                id=AxisId("channel"),
-                channel_names=[Identifier("fibre_ditancemap")],  # only one channel now
-            ),
-            SpaceOutputAxis(id=AxisId("y"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("y")), scale=config.model_pixel_size, unit="micrometer"),
-            SpaceOutputAxis(id=AxisId("x"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("x")), scale=config.model_pixel_size, unit="micrometer"),
-        ],
-        test_tensor=FileDescr(source=os.path.join(config.output_dir, "test-output.npy"))
+
+    generate_and_save_custom_cover(
+        input_image=input_,
+        output_tensor=output,
+        save_path=os.path.join(config.output_dir, "cover.png")
     )
-
-    # Generate a cover for the bioimageio model
-    covers = generate_covers(
-        inputs=[(input_descr, input_)],
-        outputs=[(output_descr_cover, output_np[0, 1:2, :, :])]
-    )
-
-    # Save the first cover
-    cover_path = os.path.join(config.output_dir, "cover.png")
-
-    import shutil
-    shutil.copy(covers[0], cover_path)
 
 
     #Define model
@@ -178,7 +218,7 @@ def export_bioimageio(config: BioimageioExportConfig):
         authors=[Author(name=name) for name in config.author_names],
         license=LicenseId(config.license_id),
         documentation=RelativeFilePath(Path(config.output_dir).name + "/" + readme_filename),
-        covers=[cover_path],
+        covers=[os.path.join(config.output_dir, "cover.png")],
         git_repo=HttpUrl("https://github.com/paucabar/aimseg-dl"),
         inputs=[input_descr],
         outputs=[output_descr],
