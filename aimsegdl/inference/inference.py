@@ -145,7 +145,7 @@ def run_inference(
 
     # Size filter
     labels_fibre = remove_small_objects(labels_fibre, min_size=min_axon_diameter, connectivity=1)
-    labels_axon = remove_small_objects(labels_axon, min_size=min_axon_diameter, connectivity=1)
+    labels_axons = remove_small_objects(labels_axon, min_size=min_axon_diameter, connectivity=1)
 
     # Axon mapping
     mapped_axons = map_axon_labels_to_fibres(labels_fibre, labels_axon)
