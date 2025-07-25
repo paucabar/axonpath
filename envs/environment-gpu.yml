@@ -1,0 +1,29 @@
+name: aimsegdl
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pytorch=2.7.0
+  - torchvision=0.18.0
+  - torchaudio=2.7.0
+  - pytorch-cuda=12.1
+  - numpy=1.26
+  - pandas=2.2.2
+  - matplotlib=3.8
+  - scikit-learn=1.3
+  - opencv=4.10
+  - seaborn=0.13
+  - tqdm
+  - colorcet
+  - ipykernel
+  - pip
+  - pip:
+      - monai==1.3.2
+      - tensorboard==2.14.0
+      - albumentations==1.3.1
+      - edt==2.4.1
+      - bioimageio-core==0.9.0
+      - bioimageio-spec==0.5.4.3
