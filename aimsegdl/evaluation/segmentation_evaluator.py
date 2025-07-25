@@ -1,4 +1,5 @@
 import numpy as np
+from skimage.measure import label
 import pandas as pd
 from typing import Tuple
 
@@ -17,8 +18,8 @@ class SegmentationEvaluator:
         assert isinstance(prediction, np.ndarray), "prediction must be a numpy array"
         assert ground_truth.shape == prediction.shape, "Shape mismatch between ground truth and prediction"
         
-        self.ground_truth = ground_truth
-        self.prediction = prediction
+        self.ground_truth = label(ground_truth)
+        self.prediction = label(prediction)
         self.iou_matrix = self._compute_iou_matrix()
 
     def _compute_iou_matrix(self) -> np.ndarray:
@@ -77,6 +78,7 @@ class SegmentationEvaluator:
 
         return f1, precision, recall, TP, FP, FN
 
+
     def evaluate_multiple_thresholds(self, image_name: str, results_df: pd.DataFrame = None) -> pd.DataFrame:
         """
         Evaluates metrics at multiple IoU thresholds and appends results to a DataFrame.
@@ -93,7 +95,7 @@ class SegmentationEvaluator:
 
         jaccard = np.max(self.iou_matrix, axis=0).mean() if self.iou_matrix.size > 0 else 0.0
 
-        for threshold in np.arange(0.5, 0.95, 0.05):
+        for threshold in np.arange(0.5, 1.0, 0.05):
             f1, precision, recall, TP, FP, FN = self._evaluate_at_threshold(threshold)
             results_df.loc[len(results_df)] = {
                 "Image_Name": image_name,
@@ -120,4 +122,7 @@ class SegmentationEvaluator:
         Returns:
             float: Mean F1 score.
         """
-        return results_df["F1"].mean()
+        
+        mean_per_image = results_df["F1"].groupby("Image_Name").mean(numeric_only=True)
+        
+        return mean_per_image.mean()

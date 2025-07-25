@@ -25,25 +25,56 @@ def plot_segmentation_comparison(gt_fibre, gt_axon, pred_fibre, pred_axon, figsi
     if title:
         fig.suptitle(title, fontsize=16)
 
-    axes[0, 0].imshow(gt_fibre, cmap='nipy_spectral')
+    axes[0, 0].imshow(gt_fibre, cmap='nipy_spectral', interpolation="nearest")
     axes[0, 0].set_title("GT Fibre")
     axes[0, 0].axis('off')
 
-    axes[0, 1].imshow(gt_axon, cmap='nipy_spectral')
+    axes[0, 1].imshow(gt_axon, cmap='nipy_spectral', interpolation="nearest")
     axes[0, 1].set_title("GT Axon")
     axes[0, 1].axis('off')
 
-    axes[1, 0].imshow(pred_fibre, cmap='nipy_spectral')
+    axes[1, 0].imshow(pred_fibre, cmap='nipy_spectral', interpolation="nearest")
     axes[1, 0].set_title("Predicted Fibre")
     axes[1, 0].axis('off')
 
-    axes[1, 1].imshow(pred_axon, cmap='nipy_spectral')
+    axes[1, 1].imshow(pred_axon, cmap='nipy_spectral', interpolation="nearest")
     axes[1, 1].set_title("Predicted Axon")
     axes[1, 1].axis('off')
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95] if title else None)
     plt.show()
 
+def compute_imagewise_means(results_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Computes mean metrics per image, then averages over all images.
+
+    Args:
+        results_df (pd.DataFrame): DataFrame with 'Image_Name', 'F1', 'Precision', 'Recall', 'Jaccard', etc.
+
+    Returns:
+        pd.Series: Series with overall mean of each metric.
+    """
+    per_image = results_df.groupby("Image_Name").mean(numeric_only=True)
+    overall_mean = per_image[["F1", "Precision", "Recall", "Jaccard"]].mean()
+    return overall_mean
+
+def plot_summary_bar(overall_metrics: pd.Series, title_tag: str):
+    """
+    Plots a bar chart of the average F1, Precision, Recall, and Jaccard.
+
+    Args:
+        overall_metrics (pd.Series): Series with metric names as index and their average values.
+        title_tag (str): Target identifier, e.g., fibre, axon... (for title only)
+    """
+    fig, ax = plt.subplots(figsize=(6, 4))
+    bars = ax.bar(overall_metrics.index, overall_metrics.values, color=["steelblue", "seagreen", "goldenrod", "mediumpurple"])
+    
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Score")
+    ax.set_title(f"{title_tag} Average Segmentation Metrics")
+    ax.bar_label(bars, fmt="%.3f", padding=3)
+    plt.tight_layout()
+    plt.show()
 
 def evaluate_model_on_testset(model_path, test_dir, device, output_csv=None, display_figure=False, show_plots=True):
     # Load model
