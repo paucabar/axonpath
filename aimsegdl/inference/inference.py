@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 from typing import Tuple
 from skimage.io import imread
+from skimage.morphology import remove_small_objects
 from monai.inferers import sliding_window_inference
 from aimsegdl.utils.model_building import model_fn
 from aimsegdl.utils.image_processing import (
@@ -11,7 +12,6 @@ from aimsegdl.utils.image_processing import (
     segment_instances_from_sdt,
     apply_semantic_segmentation_head,
     map_axon_labels_to_fibres,
-    merge_unmatched_fibres,
 )
 
 
@@ -143,10 +143,11 @@ def run_inference(
     labels_fibre = segment_instances_from_sdt(dt_fibre, fibre_threshold, min_diameter)
     labels_axon = segment_instances_from_sdt(dt_axon, axon_threshold, min_axon_diameter)
 
+    # Size filter
+    labels_fibre = remove_small_objects(labels_fibre, min_size=min_axon_diameter, connectivity=1)
+    labels_axon = remove_small_objects(labels_axon, min_size=min_axon_diameter, connectivity=1)
+
     # Axon mapping
     mapped_axons = map_axon_labels_to_fibres(labels_fibre, labels_axon)
 
-    #Fibre correction
-    fibre_final = merge_unmatched_fibres(labels_fibre, mapped_axons)
-
-    return fibre_final, mapped_axons, semantic
+    return labels_fibre, mapped_axons, semantic
