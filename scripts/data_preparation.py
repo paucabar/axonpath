@@ -1,5 +1,5 @@
 import argparse
-from aimsegdl.data_preparation.data_preparation import create_train_val_test_split_all
+from aimsegdl.data_preparation.data_preparation import split_dataset
 
 
 def main():
@@ -10,7 +10,7 @@ def main():
     parser.add_argument('--create_test_split', action='store_true', default=True, help='Create test split')
     args = parser.parse_args()
 
-    create_train_val_test_split_all(args.input, args.output, fix_label_padding=args.fix_label_padding, create_test_split=args.create_test_split)
+    split_dataset(args.input, args.output, fix_label_padding=args.fix_label_padding, create_test_split=args.create_test_split)
 
 
 if __name__ == "__main__":
