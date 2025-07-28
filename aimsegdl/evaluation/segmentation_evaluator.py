@@ -123,6 +123,4 @@ class SegmentationEvaluator:
             float: Mean F1 score.
         """
         
-        mean_per_image = results_df["F1"].groupby("Image_Name").mean(numeric_only=True)
-        
-        return mean_per_image.mean()
+        return results_df["F1"].mean()

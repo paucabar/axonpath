@@ -11,7 +11,7 @@ def train_loop(loader, model, optimizer, loss_fns, scaler, device):
         data = data.to(device)
         targets = torch.tensor(np.stack(targets, axis=1)).to(device)
 
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast(device_type=device):
             predictions = model(data).float()
             loss = compute_loss(predictions, targets, loss_fns)
 
