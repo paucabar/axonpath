@@ -1,5 +1,6 @@
 import os
 import matplotlib.pyplot as plt
+from skimage.measure import label
 import csv
 import pandas as pd
 from tqdm import tqdm
@@ -8,19 +9,21 @@ from aimsegdl.inference.inference import load_model, run_inference
 from aimsegdl.dataset.aimseg_dataset import AimSegDataset
 from aimsegdl.utils.visualization import plot_iou_distributions
 
-def plot_segmentation_comparison(gt_fibre, gt_axon, pred_fibre, pred_axon, figsize=(10, 8), title=None):
+def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, pred_inner_tongue, figsize=(20, 16), title=None):
     """
     Plots ground truth and predicted segmentation masks for fibre and axon.
 
     Args:
         gt_fibre (np.ndarray): Ground truth fibre mask.
         gt_axon (np.ndarray): Ground truth axon mask.
+        gt_inner_tongue (np.ndarray): Ground truth inner tongue mask.
         pred_fibre (np.ndarray): Predicted fibre mask.
         pred_axon (np.ndarray): Predicted axon mask.
+        pred_inner_tongue (np.ndarray): Predicted inner tongue mask.
         figsize (tuple): Size of the figure.
         title (str): Optional overall title for the plot.
     """
-    fig, axes = plt.subplots(2, 2, figsize=figsize)
+    fig, axes = plt.subplots(2, 3, figsize=figsize)
 
     if title:
         fig.suptitle(title, fontsize=16)
@@ -33,6 +36,10 @@ def plot_segmentation_comparison(gt_fibre, gt_axon, pred_fibre, pred_axon, figsi
     axes[0, 1].set_title("GT Axon")
     axes[0, 1].axis('off')
 
+    axes[0, 2].imshow(gt_inner_tongue, cmap='nipy_spectral', interpolation="nearest")
+    axes[0, 2].set_title("GT Inner Tongue")
+    axes[0, 2].axis('off')
+
     axes[1, 0].imshow(pred_fibre, cmap='nipy_spectral', interpolation="nearest")
     axes[1, 0].set_title("Predicted Fibre")
     axes[1, 0].axis('off')
@@ -41,7 +48,11 @@ def plot_segmentation_comparison(gt_fibre, gt_axon, pred_fibre, pred_axon, figsi
     axes[1, 1].set_title("Predicted Axon")
     axes[1, 1].axis('off')
 
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95] if title else None)
+    axes[1, 2].imshow(pred_inner_tongue, cmap='nipy_spectral', interpolation="nearest")
+    axes[1, 2].set_title("Predicted Inner Tongue")
+    axes[1, 2].axis('off')
+
+    plt.tight_layout()
     plt.show()
 
 def compute_imagewise_means(results_df: pd.DataFrame) -> pd.DataFrame:
@@ -87,6 +98,7 @@ def evaluate_model_on_testset(model_path, test_dir, device, output_csv=None, dis
     columns = ["Image_Name", "Threshold", "F1", "Precision", "Recall", "Jaccard", "TP", "FP", "FN"]
     fibre_results = pd.DataFrame(columns=columns)
     axon_results = pd.DataFrame(columns=columns)
+    inner_tongue_results = pd.DataFrame(columns=columns)
 
     for path in tqdm(dataset.tile_paths, desc="Evaluating tiles"):
         tile_name = os.path.splitext(os.path.basename(path))[0]
@@ -94,36 +106,45 @@ def evaluate_model_on_testset(model_path, test_dir, device, output_csv=None, dis
         image, masks = sample
 
         pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device)
+        pred_inner_tongue = label(pred_semantic == 2)
 
         gt_fibre = masks[0].numpy()
         gt_axon = masks[1].numpy()
+        gt_sem = masks[2].numpy()
+
+        gt_inner_tongue = label(gt_sem == 2)
 
         fibre_eval = SegmentationEvaluator(gt_fibre, pred_fibre)
         axon_eval = SegmentationEvaluator(gt_axon, pred_axon)
+        inner_tongue_eval = SegmentationEvaluator(gt_inner_tongue, pred_inner_tongue)
 
         fibre_results = fibre_eval.evaluate_multiple_thresholds(tile_name, fibre_results)
         axon_results = axon_eval.evaluate_multiple_thresholds(tile_name, axon_results)
+        inner_tongue_results = inner_tongue_eval.evaluate_multiple_thresholds(tile_name, inner_tongue_results)
 
         if display_figure:
             # Filter rows by tile name
             fibre_f1_filtered = fibre_results["F1"][fibre_results["Image_Name"] == tile_name]
             axon_f1_filtered = axon_results["F1"][axon_results["Image_Name"] == tile_name]
+            inner_tongue__f1_filtered = inner_tongue_results["F1"][inner_tongue_results["Image_Name"] == tile_name]
 
             # Compute means
             mean_f1_fibre = fibre_f1_filtered.mean()
             mean_f1_axon = axon_f1_filtered.mean()
+            mean_f1_inner_tongue = inner_tongue__f1_filtered.mean()
 
             # Create title
-            title = f"{tile_name} | Mean F1 Fibre: {mean_f1_fibre:.3f} | Mean F1 Axon: {mean_f1_axon:.3f}"
+            title = f"{tile_name} | Mean F1 Fibre: {mean_f1_fibre:.3f} | Mean F1 Axon: {mean_f1_axon:.3f} | Mean F1 Inner Tongue: {mean_f1_inner_tongue:.3f}"
 
             # Plot
-            plot_segmentation_comparison(gt_fibre, gt_axon, pred_fibre, pred_axon, figsize=(10, 8), title=title)
+            plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, pred_inner_tongue, figsize=(10, 8), title=title)
 
 
     if output_csv:
         base = os.path.splitext(output_csv)[0]
         fibre_path = base + "_Fibre.tsv"
         axon_path = base + "_Axon.tsv"
+        inner_tongue_path = base + "_Inner_Tongue.tsv"
 
         with open(fibre_path, mode='w', newline='') as f:
             writer = csv.writer(f, delimiter='\t')
@@ -135,10 +156,16 @@ def evaluate_model_on_testset(model_path, test_dir, device, output_csv=None, dis
             writer.writerow(axon_results.columns)
             writer.writerows(axon_results.values)
 
-        print(f"\nSaved results to:\n- {fibre_path}\n- {axon_path}")
+        with open(inner_tongue_path, mode='w', newline='') as f:
+            writer = csv.writer(f, delimiter='\t')
+            writer.writerow(inner_tongue_results.columns)
+            writer.writerows(inner_tongue_results.values)
+
+        print(f"\nSaved results to:\n- {fibre_path}\n- {axon_path}\n- {inner_tongue_path}")
 
     if show_plots:
         plot_iou_distributions(fibre_results, label="Fibre")
         plot_iou_distributions(axon_results, label="Axon")
+        plot_iou_distributions(inner_tongue_results, label="Inner_Tongue")
 
-    return fibre_results, axon_results
+    return fibre_results, axon_results, inner_tongue_results
