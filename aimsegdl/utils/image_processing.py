@@ -144,59 +144,6 @@ def apply_semantic_segmentation_head_scriptable(pred: torch.Tensor):
     return torch.argmax(F.softmax(pred, dim=1), dim=1)
 
 
-def segment_instances_from_sdt_original(
-    distancemap: torch.Tensor,
-    threshold: float = 0.5,
-    min_diameter: float = 30.0,
-    compactness: float = 0.5,
-    valid_mask: np.ndarray = None
-) -> np.ndarray:
-    """
-    Segment instance regions (e.g., fibres or axons) from a skeleton-aware distance transform.
-
-    Parameters:
-        distancemap (torch.Tensor): Predicted distance map, shape (1, H, W) or (H, W).
-        threshold (float): Threshold to define seed regions for watershed.
-        min_diameter (float): Expected minimum object diameter (used to derive min_size for seeds).
-        compactness (float): Compactness factor for the watershed algorithm.
-        valid_mask (np.ndarray, optional): Optional binary mask specifying where to restrict watershed.
-
-    Returns:
-        np.ndarray: Postprocessed label image.
-    """
-    # Convert to NumPy
-    if distancemap.ndim == 3:
-        distancemap_np = distancemap[0].detach().cpu().numpy()
-    elif distancemap.ndim == 2:
-        distancemap_np = distancemap.detach().cpu().numpy()
-    else:
-        raise ValueError(f"Unexpected distancemap shape: {distancemap.shape}")
-
-
-    # Determine valid mask
-    if valid_mask is None or not isinstance(valid_mask, np.ndarray):
-        valid_mask = distancemap_np >= 0
-
-    # Clip the map to [0, 1]
-    distancemap_clipped = np.clip(distancemap_np, 0, 1)
-
-    # Estimate seed area from min_diameter (30% of diameter radius)
-    radius = 0.3 * min_diameter / 2
-    min_area = int(np.pi * radius ** 2)
-
-    # Generate seed mask
-    seed_mask = np.logical_and(distancemap_clipped >= threshold, valid_mask)
-    seeds = label(seed_mask)
-    seeds = remove_small_objects(seeds, min_size=min_area, connectivity=1)
-    seeds = label(seeds)
-
-    # Watershed
-    labels = watershed(-distancemap_clipped, markers=seeds, mask=valid_mask, connectivity=1, compactness=compactness)
-
-    # Fill holes in final labels
-    return fill_labels(labels)
-
-
 def segment_instances_from_sdt(
     distancemap: torch.Tensor,
     threshold: float = 0.5,
