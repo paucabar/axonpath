@@ -100,7 +100,7 @@ def loss_plot_log_fn(train_loss, val_loss):
 
 
 
-def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmentation_score):
+def plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_segmentation_score):
     print("\n----------------------------------------------------------------------------")
     print("Segmentation metric trends over epochs")
 
@@ -109,7 +109,7 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, dice_score, balanced_segmenta
 
     ax.plot(epochs, f1_fibre, label="F1 Fibre")
     ax.plot(epochs, f1_axon, label="F1 Axon")
-    ax.plot(epochs, dice_score, label="Dice Score")
+    ax.plot(epochs, f1_inner_tongue, label="F1 Inner Tongue")
     ax.plot(epochs, balanced_segmentation_score, label="Balanced Segmentation Score")
 
     best_epoch = np.argmax(balanced_segmentation_score) + 1

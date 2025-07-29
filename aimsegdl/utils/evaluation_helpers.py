@@ -1,109 +1,138 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from skimage.measure import label
 from monai.metrics import DiceMetric
 from aimsegdl.utils.visualization import show_images
-from aimsegdl.utils.image_processing import apply_semantic_segmentation_head, segment_instances_from_sdt, map_axon_labels_to_fibres, merge_unmatched_fibres
+from aimsegdl.utils.image_processing import (
+    apply_semantic_segmentation_head,
+    segment_instances_from_sdt,
+    map_axon_labels_to_fibres
+)
 from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
 
 
-def evaluate_fn(loader, model, loss_fn, device="cuda", fibre_threshold: float=0.7, axon_threshold: float=0.5, min_diameter: float=15.0, show_results: bool=False):
+def evaluate(
+    loader,
+    model,
+    loss_fn,
+    device="cuda",
+    fibre_threshold: float = 0.5,
+    axon_threshold: float = 0.5,
+    min_diameter: float = 30.0,
+    show_results: bool = False
+):
+    """
+    Evaluate the model on the given loader with F1, Dice and loss metrics.
+
+    Returns:
+        Tuple: (mean_val_loss, mean_f1_fibre, mean_f1_axon, mean_f1_inner_tongue, dice_score)
+    """
     model.eval()
-    val_loss = []
-    f1_scores_fibre = []
-    f1_scores_axon = []
-    dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False, num_classes = 3)
+    val_losses = []
+    f1_scores_fibre, f1_scores_axon, f1_scores_inner_tongue = [], [], []
+    dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False, num_classes=3)
     axon_min_diameter = min_diameter * 0.7
 
     with torch.no_grad():
         for x, y in loader:
-            # Move input to device
             x = x.to(device)
+            y = torch.tensor(np.stack(y, axis=1)).to(device)
 
-            # Predict
             prediction = model(x)
 
-            # Prepare target
-            y = np.stack(y, axis=1)
-            y = torch.tensor(y).to(device=device)
+            # Loss
+            loss_ce = loss_fn[0](prediction[:, 0:3], y[:, 2].long())
+            loss_mse_fibre = loss_fn[1](prediction[:, 3], y[:, 3].float())
+            loss_mse_axon = loss_fn[1](prediction[:, 4], y[:, 4].float())
+            val_losses.append((loss_ce + loss_mse_fibre + loss_mse_axon).item())
 
-            # Compute loss
-            val_crossentropy_loss = loss_fn[0](prediction[:, 0:3, :, :], y[:, 2, :, :].long()) # semantic
-            val_mse_loss1 = loss_fn[1](prediction[:, 3, :, :], y[:, 3, :, :].float()) # fibre DT
-            val_mse_loss2 = loss_fn[1](prediction[:, 4, :, :], y[:, 4, :, :].float()) # axon DT
-            val_loss.append((val_crossentropy_loss + val_mse_loss1 + val_mse_loss2).item())
-
-            # Dice Score
-            sem_output = apply_semantic_segmentation_head(prediction[:, 0:3, :, :])
-            y_sem = y[:, 2, :, :]  # only semantic GT
+            # Dice
+            sem_pred = apply_semantic_segmentation_head(prediction[:, 0:3])
+            y_sem = y[:, 2]
             y_onehot = nn.functional.one_hot(y_sem.long(), num_classes=3).permute(0, 3, 1, 2).float()
-            pred_onehot = nn.functional.one_hot(sem_output.long(), num_classes=3).permute(0, 3, 1, 2).float()
+            pred_onehot = nn.functional.one_hot(sem_pred.long(), num_classes=3).permute(0, 3, 1, 2).float()
             dice_metric(y_pred=pred_onehot, y=y_onehot)
 
-            # F1 Scores
+            # F1 per instance
             for i in range(x.shape[0]):
-                # Predicted instances
-                pred_fibre = segment_instances_from_sdt(distancemap=prediction[i:i+1, 3, :, :],
-                                                        threshold=fibre_threshold,
-                                                        min_diameter=min_diameter
-                                                        )
-                pred_axon = segment_instances_from_sdt(distancemap=prediction[i:i+1, 4, :, :],
-                                                       threshold=axon_threshold,
-                                                       min_diameter=axon_min_diameter
-                                                       )
-                mapped_axons = map_axon_labels_to_fibres(pred_fibre, pred_axon)
-                fibre_final = merge_unmatched_fibres(fibre_labels = pred_fibre, mapped_axons = mapped_axons)
-
-                # Ground truth instances
-                gt_fibre = y[i, 0, :, :].cpu().numpy().astype(np.int32)  # assuming channel 0 is fibre
-                gt_axon = y[i, 1, :, :].cpu().numpy().astype(np.int32)  # assuming channel 1 is axon
-
-                # Evaluate each
-                evaluator_fibre = SegmentationEvaluator(gt_fibre, fibre_final)
-                evaluator_axon = SegmentationEvaluator(gt_axon, mapped_axons)
-
-                f1_fibre = evaluator_fibre.f1_mean(evaluator_fibre.evaluate_multiple_thresholds(f"sample_{i}_fibre"))
-                f1_axon = evaluator_axon.f1_mean(evaluator_axon.evaluate_multiple_thresholds(f"sample_{i}_axon"))
-
-                f1_scores_fibre.append(f1_fibre)
-                f1_scores_axon.append(f1_axon)
+                scores = evaluate_instance_metrics(
+                    prediction[i],
+                    y[i],
+                    fibre_threshold,
+                    axon_threshold,
+                    min_diameter,
+                    axon_min_diameter,
+                    i
+                )
+                f1_scores_fibre.append(scores[0])
+                f1_scores_axon.append(scores[1])
+                f1_scores_inner_tongue.append(scores[2])
 
         dice_score = dice_metric.aggregate().item()
         dice_metric.reset()
 
         if show_results:
-            semantic = apply_semantic_segmentation_head(prediction[0:1, 0:3, :, :])
-            labels_fibre = segment_instances_from_sdt(prediction[0:1, 3, :, :], fibre_threshold, min_diameter)
-            labels_axon = segment_instances_from_sdt(prediction[0:1, 4, :, :], axon_threshold, axon_min_diameter)
-            labels_axon_mapped = map_axon_labels_to_fibres(labels_fibre, labels_axon)
-            labels_fibre_final = merge_unmatched_fibres(fibre_labels = labels_fibre, mapped_axons = labels_axon_mapped)
-            show_images(
-                x[0].cpu(),
-                y[0, 0, :, :].cpu(),
-                y[0, 1, :, :].cpu(),
-                y[0, 2, :, :].cpu(),
-                prediction[0, 3, :, :].cpu(),
-                prediction[0, 4, :, :].cpu(),
-                semantic,
-                labels_fibre_final,
-                labels_axon_mapped,
-                titles=[
-                    "Image",  "Target Fibre", "Target Axon",
-                    "Target Semantic", "Pred Fibre SDT", "Pred Axon SDT",
-                    "Prediction Semantic", "Prediction Fibre Instance", "Prediction Axon Instance"
-                ],
-                cmaps=[
-                    "gray", "glasbey", "glasbey",
-                    "viridis", "magma", "magma",
-                    "viridis", "glasbey", "glasbey"
-                ],
-                n_cols=3
-            )
+            plot_example(x[0], y[0], prediction[0], fibre_threshold, axon_threshold, min_diameter, axon_min_diameter)
 
     model.train()
 
-    val_loss_mean = sum(val_loss) / len(val_loss)
-    f1_fibre = (sum(f1_scores_fibre)) / (len(f1_scores_fibre)) if (f1_scores_fibre) else 0.0
-    f1_axon = (sum(f1_scores_axon)) / (len(f1_scores_axon)) if (f1_scores_axon) else 0.0
+    return (
+        np.mean(val_losses),
+        np.mean(f1_scores_fibre) if f1_scores_fibre else 0.0,
+        np.mean(f1_scores_axon) if f1_scores_axon else 0.0,
+        np.mean(f1_scores_inner_tongue) if f1_scores_inner_tongue else 0.0,
+        dice_score
+    )
 
-    return val_loss_mean, f1_fibre, f1_axon, dice_score
+
+def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min_diameter, axon_min_diameter, index):
+    # Predict instances
+    pred_fibre = segment_instances_from_sdt(pred[3].unsqueeze(0), fibre_threshold, min_diameter)
+    pred_axon = segment_instances_from_sdt(pred[4].unsqueeze(0), axon_threshold, axon_min_diameter)
+    mapped_axons = map_axon_labels_to_fibres(pred_fibre, pred_axon)
+
+    pred_sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
+    pred_inner_tongue = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32))
+    mapped_inner_tongues = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
+    mapped_inner_tongues = np.squeeze(mapped_inner_tongues)
+
+    # Ground truth
+    gt_fibre = target[0].cpu().numpy().astype(np.int32)
+    gt_axon = target[1].cpu().numpy().astype(np.int32)
+    gt_sem = target[2].cpu().numpy().astype(np.int32)
+    gt_inner_tongue = label((gt_sem == 2).astype(np.int32))
+
+    f1_fibre = SegmentationEvaluator(gt_fibre, pred_fibre).f1_mean(
+        SegmentationEvaluator(gt_fibre, pred_fibre).evaluate_multiple_thresholds(f"sample_{index}_fibre"))
+    f1_axon = SegmentationEvaluator(gt_axon, mapped_axons).f1_mean(
+        SegmentationEvaluator(gt_axon, mapped_axons).evaluate_multiple_thresholds(f"sample_{index}_axon"))
+    f1_inner_tongue = SegmentationEvaluator(gt_inner_tongue, mapped_inner_tongues).f1_mean(
+        SegmentationEvaluator(gt_inner_tongue, mapped_inner_tongues).evaluate_multiple_thresholds(f"sample_{index}_inner_tongue"))
+
+    return f1_fibre, f1_axon, f1_inner_tongue
+
+
+def plot_example(x, y, pred, fibre_threshold, axon_threshold, min_diameter, axon_min_diameter):
+    sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
+    labels_fibre = segment_instances_from_sdt(pred[3].unsqueeze(0), fibre_threshold, min_diameter)
+    labels_axon = segment_instances_from_sdt(pred[4].unsqueeze(0), axon_threshold, axon_min_diameter)
+    labels_axon_mapped = map_axon_labels_to_fibres(labels_fibre, labels_axon)
+
+    show_images(
+        x.cpu(),
+        y[0].cpu(), y[1].cpu(), y[2].cpu(),
+        pred[3].cpu(), pred[4].cpu(),
+        sem, labels_fibre, labels_axon_mapped,
+        titles=[
+            "Image",  "Target Fibre", "Target Axon",
+            "Target Semantic", "Pred Fibre SDT", "Pred Axon SDT",
+            "Prediction Semantic", "Prediction Fibre Instance", "Prediction Axon Instance"
+        ],
+        cmaps=[
+            "gray", "glasbey", "glasbey",
+            "viridis", "magma", "magma",
+            "viridis", "glasbey", "glasbey"
+        ],
+        n_cols=3
+    )
