@@ -12,8 +12,8 @@ def load_checkpoint(checkpoint, model, optimizer):
     val_loss = checkpoint['val_loss']
     f1_fibre = checkpoint['f1_fibre']
     f1_axon = checkpoint['f1_axon']
-    dice_score = checkpoint['dice_score']
+    f1_inner_tongue = checkpoint['f1_inner_tongue']
     balanced_segmentation_score = checkpoint['balanced_segmentation_score']
     best_score = checkpoint['best_score']
     print("Loading checkpoint")
-    return last_epoch, train_loss, val_loss, f1_fibre, f1_axon, dice_score, balanced_segmentation_score, best_score
+    return last_epoch, train_loss, val_loss, f1_fibre, f1_axon, f1_inner_tongue, balanced_segmentation_score, best_score
