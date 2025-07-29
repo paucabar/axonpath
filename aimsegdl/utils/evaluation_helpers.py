@@ -8,7 +8,6 @@ from aimsegdl.utils.visualization import show_images
 from aimsegdl.utils.image_processing import (
     apply_semantic_segmentation_head,
     segment_instances_from_sdt,
-    map_axon_labels_to_fibres
 )
 from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
 
@@ -91,7 +90,6 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     # Predict instances
     pred_fibre = segment_instances_from_sdt(pred[3].unsqueeze(0), fibre_threshold, min_diameter)
     pred_axon = segment_instances_from_sdt(pred[4].unsqueeze(0), axon_threshold, axon_min_diameter)
-    mapped_axons = map_axon_labels_to_fibres(pred_fibre, pred_axon)
 
     pred_sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
     pred_inner_tongue = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32))
@@ -101,7 +99,6 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     radius = min_diameter / 2
     min_area = int(np.pi * radius ** 2)
     pred_inner_tongue = remove_small_objects(pred_inner_tongue, min_size=min_area, connectivity=1)
-    mapped_inner_tongues = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
 
     # Ground truth
     gt_fibre = target[0].cpu().numpy().astype(np.int32)
@@ -111,10 +108,10 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
 
     f1_fibre = SegmentationEvaluator(gt_fibre, pred_fibre).f1_mean(
         SegmentationEvaluator(gt_fibre, pred_fibre).evaluate_multiple_thresholds(f"sample_{index}_fibre"))
-    f1_axon = SegmentationEvaluator(gt_axon, mapped_axons).f1_mean(
-        SegmentationEvaluator(gt_axon, mapped_axons).evaluate_multiple_thresholds(f"sample_{index}_axon"))
-    f1_inner_tongue = SegmentationEvaluator(gt_inner_tongue, mapped_inner_tongues).f1_mean(
-        SegmentationEvaluator(gt_inner_tongue, mapped_inner_tongues).evaluate_multiple_thresholds(f"sample_{index}_inner_tongue"))
+    f1_axon = SegmentationEvaluator(gt_axon, pred_axon).f1_mean(
+        SegmentationEvaluator(gt_axon, pred_axon).evaluate_multiple_thresholds(f"sample_{index}_axon"))
+    f1_inner_tongue = SegmentationEvaluator(gt_inner_tongue, pred_inner_tongue).f1_mean(
+        SegmentationEvaluator(gt_inner_tongue, pred_inner_tongue).evaluate_multiple_thresholds(f"sample_{index}_inner_tongue"))
 
     return f1_fibre, f1_axon, f1_inner_tongue
 
@@ -123,13 +120,12 @@ def plot_example(x, y, pred, fibre_threshold, axon_threshold, min_diameter, axon
     sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
     labels_fibre = segment_instances_from_sdt(pred[3].unsqueeze(0), fibre_threshold, min_diameter)
     labels_axon = segment_instances_from_sdt(pred[4].unsqueeze(0), axon_threshold, axon_min_diameter)
-    labels_axon_mapped = map_axon_labels_to_fibres(labels_fibre, labels_axon)
 
     show_images(
         x.cpu(),
         y[0].cpu(), y[1].cpu(), y[2].cpu(),
         pred[3].cpu(), pred[4].cpu(),
-        sem, labels_fibre, labels_axon_mapped,
+        sem, labels_fibre, labels_axon,
         titles=[
             "Image",  "Target Fibre", "Target Axon",
             "Target Semantic", "Pred Fibre SDT", "Pred Axon SDT",
