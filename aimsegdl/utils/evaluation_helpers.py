@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from skimage.measure import label
+from skimage.morphology import remove_small_objects
 from monai.metrics import DiceMetric
 from aimsegdl.utils.visualization import show_images
 from aimsegdl.utils.image_processing import (
@@ -96,6 +97,11 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     pred_inner_tongue = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32))
     mapped_inner_tongues = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
     mapped_inner_tongues = np.squeeze(mapped_inner_tongues)
+
+    # Estimate inner tongue min area from min_diameter
+    radius = 0.7 * min_diameter / 2
+    min_area = int(np.pi * radius ** 2)
+    mapped_inner_tongues = remove_small_objects(mapped_inner_tongues, min_size=min_area, connectivity=1)
 
     # Ground truth
     gt_fibre = target[0].cpu().numpy().astype(np.int32)
