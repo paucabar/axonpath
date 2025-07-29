@@ -95,13 +95,13 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
 
     pred_sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
     pred_inner_tongue = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32))
-    mapped_inner_tongues = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
-    mapped_inner_tongues = np.squeeze(mapped_inner_tongues)
+    pred_inner_tongue = np.squeeze(pred_inner_tongue)
 
     # Estimate inner tongue min area from min_diameter
-    radius = 0.7 * min_diameter / 2
+    radius = min_diameter / 2
     min_area = int(np.pi * radius ** 2)
-    mapped_inner_tongues = remove_small_objects(mapped_inner_tongues, min_size=min_area, connectivity=1)
+    pred_inner_tongue = remove_small_objects(pred_inner_tongue, min_size=min_area, connectivity=1)
+    mapped_inner_tongues = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
 
     # Ground truth
     gt_fibre = target[0].cpu().numpy().astype(np.int32)

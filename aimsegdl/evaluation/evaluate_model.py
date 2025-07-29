@@ -1,6 +1,8 @@
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 from skimage.measure import label
+from skimage.morphology import remove_small_objects
 import csv
 import pandas as pd
 from tqdm import tqdm
@@ -8,6 +10,7 @@ from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
 from aimsegdl.inference.inference import load_model, run_inference
 from aimsegdl.dataset.aimseg_dataset import AimSegDataset
 from aimsegdl.utils.visualization import plot_iou_distributions
+from aimsegdl.utils.image_processing import map_axon_labels_to_fibres
 
 def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, pred_inner_tongue, figsize=(20, 16), title=None):
     """
@@ -87,7 +90,7 @@ def plot_summary_bar(overall_metrics: pd.Series, title_tag: str):
     plt.tight_layout()
     plt.show()
 
-def evaluate_model_on_testset(model_path, test_dir, device, output_csv=None, display_figure=False, show_plots=True):
+def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output_csv=None, display_figure=False, show_plots=True):
     # Load model
     model = load_model(model_path, device=device)
 
@@ -107,6 +110,12 @@ def evaluate_model_on_testset(model_path, test_dir, device, output_csv=None, dis
 
         pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device)
         pred_inner_tongue = label(pred_semantic == 2)
+        
+        # Estimate inner tongue min area from min_diameter
+        radius = min_diameter / 2
+        min_area = int(np.pi * radius ** 2)
+        pred_inner_tongue = remove_small_objects(pred_inner_tongue, min_size=min_area, connectivity=1)
+        mapped_inner_tongue = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
 
         gt_fibre = masks[0].numpy()
         gt_axon = masks[1].numpy()
@@ -116,7 +125,7 @@ def evaluate_model_on_testset(model_path, test_dir, device, output_csv=None, dis
 
         fibre_eval = SegmentationEvaluator(gt_fibre, pred_fibre)
         axon_eval = SegmentationEvaluator(gt_axon, pred_axon)
-        inner_tongue_eval = SegmentationEvaluator(gt_inner_tongue, pred_inner_tongue)
+        inner_tongue_eval = SegmentationEvaluator(gt_inner_tongue, mapped_inner_tongue)
 
         fibre_results = fibre_eval.evaluate_multiple_thresholds(tile_name, fibre_results)
         axon_results = axon_eval.evaluate_multiple_thresholds(tile_name, axon_results)
