@@ -9,6 +9,7 @@ class BioimageioExportConfig:
     test_img_path: str                 # Input image for generating test input/output
     output_dir: str                      # Exported model directory
     model_pixel_size: float               # µm per pixel
+    min_diameter: float                     # Minimum expected diameter
     readme_text: Optional[str] = None      # Optional custom README text
     cover_image: Optional[str] = None      # Optional manual cover path override
     citation_text: Optional[str] = None    # Optional citation string

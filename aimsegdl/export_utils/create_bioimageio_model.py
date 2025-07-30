@@ -10,6 +10,7 @@ from aimsegdl.inference.inference import load_model
 from aimsegdl.pipeline import Pipeline
 from aimsegdl.utils.image_processing import normalize, segment_instances_from_sdt, map_axon_labels_to_fibres
 from aimsegdl.export_utils.config import BioimageioExportConfig
+from aimsegdl.utils.visualization import get_glasbey_cmap
 
 from bioimageio.spec.model.v0_5 import (
     ModelDescr,
@@ -60,6 +61,7 @@ def write_readme(model_name: str, output_dir: str) -> str:
 def generate_and_save_custom_cover(
     input_image: np.ndarray,
     output_tensor: torch.Tensor,
+    min_diameter: float,
     save_path: str
 ):
     """
@@ -82,8 +84,8 @@ def generate_and_save_custom_cover(
     # Extract images
     gray = input_image[0, 0]
     semantic_logits = output_tensor[0, 0]
-    fibre = segment_instances_from_sdt(output_tensor[0, 1])
-    axon = segment_instances_from_sdt(output_tensor[0, 2])
+    fibre = segment_instances_from_sdt(output_tensor[0, 1], min_diameter=min_diameter)
+    axon = segment_instances_from_sdt(output_tensor[0, 2], min_diameter=min_diameter)
     axon_mapped = map_axon_labels_to_fibres(fibre, axon)
 
     # Ensure semantic is class index (0, 1, 2)
@@ -95,10 +97,11 @@ def generate_and_save_custom_cover(
     semantic_classes[(semantic_classes != 2) & filled_label_2] = 2
 
     # Get colormapped RGB versions (values expected in [0, N] range)
+    glasbey = get_glasbey_cmap()
     gray_rgb = cm.get_cmap("gray")(gray)[..., :3]
     semantic_rgb = cm.get_cmap("viridis")(semantic_classes / 2.0)[..., :3]
-    fibre_rgb = cm.get_cmap("nipy_spectral")(fibre)[..., :3]
-    axon_rgb = cm.get_cmap("nipy_spectral")(axon_mapped)[..., :3]
+    fibre_rgb = glasbey(fibre / fibre.max())[..., :3]
+    axon_rgb = glasbey(axon_mapped / axon_mapped.max())[..., :3]
 
     # Stack all full-sized images into a blank canvas
     H, W = gray.shape
@@ -205,6 +208,7 @@ def export_bioimageio(config: BioimageioExportConfig):
     generate_and_save_custom_cover(
         input_image=input_,
         output_tensor=output,
+        min_diameter=config.min_diameter,
         save_path=os.path.join(config.output_dir, "cover.png")
     )
 
