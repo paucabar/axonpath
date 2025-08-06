@@ -16,3 +16,4 @@ class BioimageioExportConfig:
     citation_doi: Optional[str] = None     # Optional DOI string
     author_names: List[str] = field(default_factory=lambda: ["Your Name"])  # Multiple authors supported
     license_id: str = "CC-BY-4.0"          # BioImage.IO License ID
+    validate: bool = False                 # Run BioimageIO test

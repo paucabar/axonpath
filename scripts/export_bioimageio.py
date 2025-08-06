@@ -15,7 +15,28 @@ def main():
     parser.add_argument("--citation_text", type=str, default="Carrillo-Barberà et al., 2025", help="Citation text")
     parser.add_argument("--citation_doi", type=str, default="10.1234/fake-doi-placeholder", help="Citation DOI")
     parser.add_argument("--license_id", type=str, default="CC-BY-4.0", help="License ID")
-    parser.add_argument("--author_names", nargs="+", required=True, help="List of author names")
+    parser.add_argument(
+        "--author_names",
+        nargs="+",
+        default=[
+            "Pau Carrillo-Barberà",
+            "Thibaut Goldsborough",
+            "Alan O'Callaghan",
+            "Andrea Poveda Sabuco",
+            "Chiara Sgattoni",
+            "Jose Antonio Gómez Sánchez",
+            "Ana Rondelli",
+            "Anna Williams",
+            "Peter Bankhead"
+        ],
+        help="List of author names"
+    )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="If passed, validates the exported BioImage.IO model"
+    )
+
 
     args = parser.parse_args()
 
@@ -31,6 +52,7 @@ def main():
         citation_doi=args.citation_doi,
         author_names=args.author_names,
         license_id=args.license_id,
+        validate=args.validate,
     )
 
     export_bioimageio(config)

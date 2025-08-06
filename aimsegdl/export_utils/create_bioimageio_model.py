@@ -40,20 +40,48 @@ from bioimageio.spec import save_bioimageio_package
 from bioimageio.core import test_model
 
 
-def write_readme(model_name: str, output_dir: str) -> str:
+def write_readme(config: BioimageioExportConfig) -> str:
     """
     Write a simple README file for the exported model.
     
     Returns the relative filename (to be used in the RDF).
     """
-    readme_filename = model_name + "_README.md"
-    readme_path = os.path.join(output_dir, readme_filename)
+    readme_filename = "README.md"
+    readme_path = os.path.join(config.output_dir, readme_filename)
 
-    with open(readme_path, "w") as f:
-        f.write(f"# {model_name}\n")
-        f.write("This model segments axons and fibres in EM images using AimSegDL.\n")
-        f.write(f"The {model_name} method is shared with a CC-BY-4.0 license.\n\n")
-        f.write("Please refer to the AimSegDL documentation for inference and post-processing steps.\n")
+    with open(readme_path, "w", encoding="utf-8") as f:
+        # Title
+        f.write(f"# {config.model_name}\n\n")
+
+        # Purpose
+        f.write("This model segments axons and fibres using the AimSegDL framework.\n\n")
+
+        # Version & Licensing
+        f.write(f"**Version**: {config.model_version}\n\n")
+        f.write(f"**License**: {config.license_id}\n\n")
+
+        # Pixel size
+        f.write(f"**Pixel size**: {config.model_pixel_size:.3f} µm/pixel\n")
+        f.write(f"**Minimum object diameter**: {config.min_diameter} pixels\n\n")
+
+        # Citation
+        if config.citation_text or config.citation_doi:
+            f.write("## Citation\n")
+            if config.citation_text:
+                f.write(f"{config.citation_text}\n\n")
+            if config.citation_doi:
+                f.write(f"DOI: [{config.citation_doi}](https://doi.org/{config.citation_doi})\n\n")
+
+        # Authors
+        if config.author_names:
+            f.write("## Authors\n")
+            for author in config.author_names:
+                f.write(f"- {author}\n")
+            f.write("\n")
+
+        # Usage note
+        f.write("## Usage\n")
+        f.write("Refer to the AimSegDL documentation for inference and post-processing instructions.\n")
 
     return readme_filename
 
@@ -152,15 +180,6 @@ def export_bioimageio(config: BioimageioExportConfig):
 
     np.save(os.path.join(config.output_dir, "test-output.npy"), output_np)
 
-    print("input:", input_tensor.shape)
-    print("output:", output.shape)
-    print("output dtype:", output.dtype)
-    print("semantic unique:", np.unique(output[0:1, 0:1, :, :]), "dtype", output[0:1, 0:1, :, :].dtype)
-    print("dt_fibre unique:", np.unique(output[0:1, 1:2, :, :]), "dtype", output[0:1, 1:2, :, :].dtype)
-    print("dt_axon unique:", np.unique(output[0:1, 2:3, :, :]), "dtype", output[0:1, 2:3, :, :].dtype)
-    print("test-input-shape", np.load("bioimageio_model/test-input.npy").shape)
-    print("test-output-shape", np.load("bioimageio_model/test-output.npy").shape)
-
     # Confirm similarity
     expected = output.cpu().numpy()
     predicted = np.load("bioimageio_model/test-output.npy")
@@ -170,7 +189,7 @@ def export_bioimageio(config: BioimageioExportConfig):
 
 
     # Write README inside output_dir
-    readme_filename = write_readme(config.model_name, config.output_dir)
+    readme_filename = write_readme(config)
 
     # Define input
     input_descr = InputTensorDescr(
@@ -231,7 +250,8 @@ def export_bioimageio(config: BioimageioExportConfig):
                 pytorch_version=torch.__version__,
             )
         ),
-        cite=[CiteEntry(text=config.citation_text, doi=Doi(config.citation_doi))]  # TODO: update DOI
+        cite=[CiteEntry(text=config.citation_text, doi=Doi(config.citation_doi))],  # TODO: update DOI
+        config={"min_diameter": config.min_diameter} # custom field
     )
 
     # Save model package
@@ -239,6 +259,7 @@ def export_bioimageio(config: BioimageioExportConfig):
     package_path = save_bioimageio_package(model_descr, output_path=zip_path)
     print("Saved model package:", package_path)
 
-    # Validate RDF + package
-    summary = test_model(model_descr, weight_format="torchscript", test_tolerance=1e-2)
-    summary.display()
+    # Validate model
+    if config.validate:
+        summary = test_model(model_descr, weight_format="torchscript", test_tolerance=1e-2)
+        summary.display()
