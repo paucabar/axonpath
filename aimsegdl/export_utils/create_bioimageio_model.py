@@ -52,7 +52,7 @@ def write_readme(config: BioimageioExportConfig) -> str:
 
     with open(readme_path, "w", encoding="utf-8") as f:
         # Title
-        f.write(f"# {config.model_name}\n\n")
+        f.write(f"# {config.model_name}-{config.model_version}\n\n")
 
         # Purpose
         f.write("This model segments axons and fibres using the AimSegDL framework.\n\n")
@@ -256,7 +256,7 @@ def export_bioimageio(config: BioimageioExportConfig):
     )
 
     # Save model package
-    zip_path = Path(config.output_dir) / f"{config.model_name}.zip"
+    zip_path = Path(config.output_dir) / f"{config.model_name}-{config.model_version}.zip"
     package_path = save_bioimageio_package(model_descr, output_path=zip_path)
     print("Saved model package:", package_path)
 
