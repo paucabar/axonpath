@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+
 @dataclass
 class BioimageioExportConfig:
     model_path: str                    # Path to .pth or .pt file

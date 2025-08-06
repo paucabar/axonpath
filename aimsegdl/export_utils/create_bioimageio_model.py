@@ -36,6 +36,7 @@ from bioimageio.spec.model.v0_5 import (
     Doi,
     Identifier,
 )
+
 from bioimageio.spec import save_bioimageio_package
 from bioimageio.core import test_model
 
