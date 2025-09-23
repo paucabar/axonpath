@@ -72,7 +72,7 @@ def loss_plot_fn(train_loss, val_loss):
 
     fig.set_facecolor('white')
     fig.tight_layout()
-    fig.savefig('loss_plot.png', bbox_inches='tight', dpi=300)
+    fig.savefig('loss_plot.pdf', bbox_inches='tight', dpi=300)
     plt.show(block=False)
     plt.pause(0.01)
 
@@ -94,7 +94,7 @@ def loss_plot_log_fn(train_loss, val_loss):
 
     fig.set_facecolor("white")
     fig.tight_layout()
-    fig.savefig("loss_plot_log.png", bbox_inches="tight", dpi=300)
+    fig.savefig("loss_plot_log.pdf", bbox_inches="tight", dpi=300)
     plt.show(block=False)
     plt.pause(0.01)
 
@@ -128,13 +128,49 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg
 
     fig.set_facecolor('white')
     fig.tight_layout()
-    fig.savefig("segmentation_scores_plot.png", bbox_inches='tight', dpi=300)
+    fig.savefig("segmentation_scores_plot.pdf", bbox_inches='tight', dpi=300)
     plt.show(block=False)
     plt.pause(0.01)
 
 
-
 def plot_iou_distributions(df, label):
+    """
+    Plot mean F1 with confidence interval.
+
+    Args:
+        df (pd.DataFrame): DataFrame with columns ['Image_Name', 'Threshold', 'F1'].
+        label (str): Type of label (e.g., "Fibre" or "Axon").
+    """
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Compute mean and confidence interval
+    grouped = df.groupby("Threshold")["F1"]
+    mean_f1 = grouped.mean()
+    std_f1 = grouped.std()
+    n = df["Image_Name"].nunique()
+    ci95 = 1.96 * std_f1 / np.sqrt(n)  # 95% CI
+
+    # Plot mean line
+    ax.plot(mean_f1.index, mean_f1.values, label="Mean F1", color="black", linewidth=2)
+
+    # Plot shaded confidence interval
+    ax.fill_between(mean_f1.index, mean_f1 - ci95, mean_f1 + ci95, color="blue", alpha=0.3, label="95% CI")
+
+    # Styling
+    ax.set_title(f"{label} F1 Across IoU Thresholds")
+    ax.set_xlabel("IoU Threshold")
+    ax.set_ylabel("F1 Score")
+    ax.set_ylim(0, 1.05)
+    ax.legend()
+    ax.grid(True)
+
+    fig.tight_layout()
+    plt.savefig(f"{label.lower()}_iou_distribution.pdf", dpi=300, bbox_inches="tight")
+    plt.show(block=False)
+    plt.pause(0.01)
+
+
+def plot_iou_distributions_imagewise(df, label):
     """
     Plot IoU/F1 distributions for each image using matplotlib (no seaborn).
 
@@ -161,6 +197,6 @@ def plot_iou_distributions(df, label):
     ax.grid(True)
 
     fig.tight_layout()
-    plt.savefig(f"{label.lower()}_iou_distribution.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"{label.lower()}_iou_distribution.pdf", dpi=300, bbox_inches="tight")
     plt.show(block=False)
     plt.pause(0.01)
