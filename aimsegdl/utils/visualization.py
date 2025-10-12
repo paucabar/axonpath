@@ -52,8 +52,10 @@ def show_images(*images, titles=None, cmaps=None, n_cols=3, figsize=(15, 10)):
         ax.axis("off")
 
     fig.tight_layout()
-    plt.show(block=False)
-    plt.pause(0.01)
+    fig.savefig("prediction_example_plot.pdf", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+    #plt.show(block=False)
+    #plt.pause(0.01)
 
 
 def loss_plot_fn(train_loss, val_loss):
