@@ -149,7 +149,8 @@ def segment_instances_from_sdt(
     threshold: float = 0.5,
     min_diameter: float = 30.0,
     compactness: float = 0.5,
-    valid_mask: np.ndarray = None
+    valid_mask: np.ndarray = None,
+    seed_mask: np.ndarray = None
 ) -> np.ndarray:
     """
     Segment instance regions (e.g., fibres or axons) from a skeleton-aware distance transform.
@@ -160,6 +161,7 @@ def segment_instances_from_sdt(
         min_diameter (float): Expected minimum object diameter (used to derive min_size for seeds).
         compactness (float): Compactness factor for the watershed algorithm.
         valid_mask (np.ndarray, optional): Optional binary mask specifying where to restrict watershed.
+        seed_mask (np.ndarray, optional): Optional binary mask specifying seeds.
 
     Returns:
         np.ndarray: Postprocessed label image.
@@ -185,7 +187,9 @@ def segment_instances_from_sdt(
     min_area = int(np.pi * radius ** 2)
 
     # Generate seed mask
-    seed_mask = np.logical_and(distancemap_clipped >= threshold, valid_mask)
+    if seed_mask is None or not isinstance(seed_mask, np.ndarray):
+        seed_mask = np.logical_and(distancemap_clipped >= threshold, valid_mask)
+    
     seeds = label(seed_mask)
     seeds = remove_small_objects(seeds, min_size=min_area, connectivity=1)
     seeds = label(seeds)
@@ -197,16 +201,25 @@ def segment_instances_from_sdt(
     return fill_labels(labels)
 
 
-def map_axon_labels_to_fibres(label_img1: np.ndarray, label_img2: np.ndarray) -> np.ndarray:
+def map_axon_labels_to_fibres(
+    label_img1: np.ndarray, 
+    label_img2: np.ndarray, 
+    min_overlap_frac: float = 0.5
+) -> np.ndarray:
     """
-    Merge label_img2 fragments by assigning each to the label_img1 object it overlaps with most.
+    Merge label_img2 fragments by assigning each to the label_img1 object it overlaps with most,
+    provided that the overlap covers at least `min_overlap_frac` of the label_img2 object.
 
     Parameters:
         label_img1 (np.ndarray): Reference label image (e.g., fibres).
         label_img2 (np.ndarray): Fragmented label image (e.g., axons).
+        min_overlap_frac (float): Minimum fraction of label_img2 area that must overlap 
+                                  with a label in label_img1 to accept the mapping.
+                                  Default = 0.5.
 
     Returns:
-        np.ndarray: New label image where label_img2 fragments are grouped by their best label_img1 match.
+        np.ndarray: New label image where label_img2 fragments are grouped by their best 
+                    label_img1 match, or set to 0 if overlap is insufficient.
     """
     label_img1 = label_img1.astype(np.int32)
     label_img2 = label_img2.astype(np.int32)
@@ -225,8 +238,15 @@ def map_axon_labels_to_fibres(label_img1: np.ndarray, label_img2: np.ndarray) ->
         overlaps = overlap_matrix[1:, l2]
         if overlaps.sum() == 0:
             continue
+
         best_l1 = np.argmax(overlaps) + 1
-        merged[label_img2 == l2] = best_l1
+        overlap = overlaps[best_l1 - 1]
+
+        l2_area = np.sum(label_img2 == l2)
+        frac = overlap / l2_area
+
+        if frac >= min_overlap_frac:
+            merged[label_img2 == l2] = best_l1
 
     return merged
 
