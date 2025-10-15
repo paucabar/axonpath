@@ -251,6 +251,99 @@ def map_axon_labels_to_fibres(
     return merged
 
 
+def get_edge_touching_labels(label_img: np.ndarray) -> set:
+    """
+    Identify all instance labels that touch any edge of the image.
+
+    Parameters
+    ----------
+    label_img : np.ndarray
+        2D labeled image where 0 is background and positive integers represent instances.
+
+    Returns
+    -------
+    set
+        A set of integer label IDs that touch any image border.
+    """
+    labels_touching = set()
+    rows, cols = label_img.shape
+
+    # Check top, bottom, left, right edges
+    for arr in [label_img[0, :], label_img[-1, :], label_img[:, 0], label_img[:, -1]]:
+        edge_vals = np.unique(arr)
+        labels_touching.update(edge_vals[edge_vals != 0])
+
+    return labels_touching
+
+def remove_edge_touching_labels(
+    fibre_labels: np.ndarray,
+    inner_tongue_labels: np.ndarray,
+    axon_labels: np.ndarray = None
+) -> tuple:
+    """
+    Remove all labels that touch the image border from the provided label images.
+
+    Parameters
+    ----------
+    fibre_labels : np.ndarray
+        Labeled image of fibre instances (2D).
+    inner_tongue_labels : np.ndarray
+        Labeled image of inner-tongue instances (2D).
+    axon_labels : np.ndarray, optional
+        Labeled image of axon instances (2D). If provided, these labels will also be cleaned.
+
+    Returns
+    -------
+    tuple
+        Cleaned (fibre_labels, inner_tongue_labels, axon_labels) as np.ndarrays.
+        If `axon_labels` was not provided, returns only two arrays.
+    """
+    edge_labels = get_edge_touching_labels(fibre_labels)
+    if not edge_labels:
+        return (fibre_labels, inner_tongue_labels, axon_labels) if axon_labels is not None else (fibre_labels, inner_tongue_labels)
+
+    # Remove edge-touching labels from all relevant maps
+    fibre_labels = fibre_labels.copy()
+    inner_tongue_labels = inner_tongue_labels.copy()
+    fibre_labels[np.isin(fibre_labels, list(edge_labels))] = 0
+    inner_tongue_labels[np.isin(inner_tongue_labels, list(edge_labels))] = 0
+
+    if axon_labels is not None:
+        axon_labels = axon_labels.copy()
+        axon_labels[np.isin(axon_labels, list(edge_labels))] = 0
+        return fibre_labels, inner_tongue_labels, axon_labels
+
+    return fibre_labels, inner_tongue_labels
+
+def remove_unmapped_labels(label_img: np.ndarray, mapped_img: np.ndarray) -> np.ndarray:
+    """
+    Remove labels from `label_img` that have no corresponding label in `mapped_img`.
+
+    Parameters
+    ----------
+    label_img : np.ndarray
+        Source label image whose unmapped labels should be removed.
+    mapped_img : np.ndarray
+        Reference label image that defines which instances are kept.
+
+    Returns
+    -------
+    np.ndarray
+        A copy of `label_img` where unmapped (unmatched) labels are set to 0.
+    """
+    label_img = label_img.copy()
+    labels_in_img1 = np.unique(label_img)
+    labels_in_img2 = np.unique(mapped_img)
+
+    labels_in_img1 = labels_in_img1[labels_in_img1 != 0]  # exclude background
+    unmapped_labels = [lab for lab in labels_in_img1 if lab not in labels_in_img2]
+
+    if unmapped_labels:
+        label_img[np.isin(label_img, unmapped_labels)] = 0
+
+    return label_img
+
+
 def merge_unmatched_fibres(
     fibre_labels: np.ndarray,
     mapped_axons: np.ndarray,
