@@ -12,7 +12,7 @@ def model_fn(device, norm_type="batch"):
     if norm_type == "batch":
         norm = Norm.BATCH
     elif norm_type == "group":
-        norm = Norm.INSTANCE  # MONAI does not use GroupNorm directly, but INSTANCE works similarly for small batches
+        norm = Norm.INSTANCE
     else:
         raise ValueError("Unsupported norm type: choose 'batch' or 'group'")
 

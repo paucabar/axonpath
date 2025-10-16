@@ -8,6 +8,7 @@ from aimsegdl.utils.visualization import show_images
 from aimsegdl.utils.image_processing import (
     apply_semantic_segmentation_head,
     segment_instances_from_sdt,
+    fill_labels,
 )
 from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
 
@@ -32,7 +33,7 @@ def evaluate(
     val_losses = []
     f1_scores_fibre, f1_scores_axon, f1_scores_inner_tongue = [], [], []
     dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False, num_classes=3)
-    axon_min_diameter = min_diameter * 0.7
+    axon_min_diameter = min_diameter / 2
 
     with torch.no_grad():
         for x, y in loader:
@@ -96,9 +97,11 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     pred_inner_tongue = np.squeeze(pred_inner_tongue)
 
     # Estimate inner tongue min area from min_diameter
-    radius = min_diameter / 2
+    min_diameter_inner_tongue = min_diameter / 2
+    radius = min_diameter_inner_tongue / 2
     min_area = int(np.pi * radius ** 2)
     pred_inner_tongue = remove_small_objects(pred_inner_tongue, min_size=min_area, connectivity=1)
+    pred_inner_tongue = fill_labels(pred_inner_tongue)
 
     # Ground truth
     gt_fibre = target[0].cpu().numpy().astype(np.int32)

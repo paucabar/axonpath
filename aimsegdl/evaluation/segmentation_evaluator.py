@@ -95,7 +95,7 @@ class SegmentationEvaluator:
 
         jaccard = np.max(self.iou_matrix, axis=0).mean() if self.iou_matrix.size > 0 else 0.0
 
-        for threshold in np.arange(0.5, 1.0, 0.05):
+        for threshold in np.arange(0.5, 0.95, 0.05):
             f1, precision, recall, TP, FP, FN = self._evaluate_at_threshold(threshold)
             results_df.loc[len(results_df)] = {
                 "Image_Name": image_name,

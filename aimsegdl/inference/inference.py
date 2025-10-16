@@ -113,7 +113,7 @@ def run_inference(
     """
     model.eval()
     model.to(device)
-    min_axon_diameter = min_diameter * 0.7
+    min_axon_diameter = min_diameter / 2
 
     # Prepare input
     input_tensor = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).float().to(device)  # [1, 1, H, W]
@@ -140,12 +140,8 @@ def run_inference(
     dt_axon = prediction[4, :, :]
 
     # Instance segmentation
-    labels_fibre = segment_instances_from_sdt(dt_fibre, fibre_threshold, min_diameter)
+    labels_fibre = segment_instances_from_sdt(distancemap=dt_fibre, threshold=fibre_threshold, min_diameter=min_diameter, valid_mask=None, seed_mask=None)
     labels_axon = segment_instances_from_sdt(dt_axon, axon_threshold, min_axon_diameter)
-
-    # Size filter
-    labels_fibre = remove_small_objects(labels_fibre, min_size=min_axon_diameter, connectivity=1)
-    labels_axon = remove_small_objects(labels_axon, min_size=min_axon_diameter, connectivity=1)
 
     # Axon mapping
     mapped_axons = map_axon_labels_to_fibres(labels_fibre, labels_axon)

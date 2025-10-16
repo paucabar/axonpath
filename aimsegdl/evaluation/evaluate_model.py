@@ -10,7 +10,7 @@ from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
 from aimsegdl.inference.inference import load_model, run_inference
 from aimsegdl.dataset.aimseg_dataset import AimSegDataset
 from aimsegdl.utils.visualization import plot_iou_distributions
-from aimsegdl.utils.image_processing import map_axon_labels_to_fibres
+from aimsegdl.utils.image_processing import fill_labels, map_axon_labels_to_fibres, remove_unmapped_labels
 
 def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, pred_inner_tongue, figsize=(20, 16), title=None):
     """
@@ -108,14 +108,17 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
         sample = dataset.__getitem__(dataset.tile_paths.index(path))
         image, masks = sample
 
-        pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device)
+        pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device, min_diameter=min_diameter)
         pred_inner_tongue = label(pred_semantic == 2)
         
         # Estimate inner tongue min area from min_diameter
-        radius = min_diameter / 2
+        min_diameter_inner_tongue = min_diameter / 2
+        radius = min_diameter_inner_tongue / 2
         min_area = int(np.pi * radius ** 2)
+        pred_inner_tongue = fill_labels(pred_inner_tongue)
         pred_inner_tongue = remove_small_objects(pred_inner_tongue, min_size=min_area, connectivity=1)
         mapped_inner_tongue = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
+        #pred_fibre = remove_unmapped_labels(pred_fibre, mapped_inner_tongue)
 
         gt_fibre = masks[0].numpy()
         gt_axon = masks[1].numpy()
@@ -146,7 +149,7 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
             title = f"{tile_name} | Mean F1 Fibre: {mean_f1_fibre:.3f} | Mean F1 Axon: {mean_f1_axon:.3f} | Mean F1 Inner Tongue: {mean_f1_inner_tongue:.3f}"
 
             # Plot
-            plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, pred_inner_tongue, figsize=(10, 8), title=title)
+            plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, mapped_inner_tongue, figsize=(10, 8), title=title)
 
 
     if output_csv:
