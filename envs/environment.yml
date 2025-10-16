@@ -19,6 +19,7 @@ dependencies:
   - tqdm
   - colorcet
   - ipykernel
+  - scipy
   - pip
   - pip:
       - albumentations==1.3.1
