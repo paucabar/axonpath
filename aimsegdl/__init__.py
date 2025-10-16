@@ -6,6 +6,7 @@ from . import skeleton
 from . import evaluation
 from . import export_utils
 from . import training
+from . import measure
 
 __all__ = [
     "Pipeline",
@@ -15,5 +16,6 @@ __all__ = [
     "skeleton",
     "evaluation",
     "export_utils",
-    "training"
+    "training",
+    "measure",
 ]
