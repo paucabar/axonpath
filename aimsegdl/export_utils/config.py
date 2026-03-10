@@ -10,7 +10,8 @@ class BioimageioExportConfig:
     test_img_path: str                 # Input image for generating test input/output
     output_dir: str                      # Exported model directory
     model_pixel_size: float               # µm per pixel
-    min_diameter: float                     # Minimum expected diameter
+    min_diameter: float                    # Minimum expected diameter
+    predict_inner_tongue: bool = True      # Only predicts fibre and axon if false
     readme_text: Optional[str] = None      # Optional custom README text
     cover_image: Optional[str] = None      # Optional manual cover path override
     citation_text: Optional[str] = None    # Optional citation string

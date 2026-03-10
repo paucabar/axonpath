@@ -41,42 +41,42 @@ from bioimageio.spec import save_bioimageio_package
 from bioimageio.core import test_model
 
 
-def write_readme(config: BioimageioExportConfig) -> str:
+def write_readme(config_bioimageio: BioimageioExportConfig) -> str:
     """
     Write a simple README file for the exported model.
     
     Returns the relative filename (to be used in the RDF).
     """
     readme_filename = "README.md"
-    readme_path = os.path.join(config.output_dir, readme_filename)
+    readme_path = os.path.join(config_bioimageio.output_dir, readme_filename)
 
     with open(readme_path, "w", encoding="utf-8") as f:
         # Title
-        f.write(f"# {config.model_name}-{config.model_version}\n\n")
+        f.write(f"# {config_bioimageio.model_name}-{config_bioimageio.model_version}\n\n")
 
         # Purpose
         f.write("This model segments axons and fibres using the AimSegDL framework.\n\n")
 
         # Version & Licensing
-        f.write(f"**Version**: {config.model_version}\n\n")
-        f.write(f"**License**: {config.license_id}\n\n")
+        f.write(f"**Version**: {config_bioimageio.model_version}\n\n")
+        f.write(f"**License**: {config_bioimageio.license_id}\n\n")
 
         # Pixel size
-        f.write(f"**Pixel size**: {config.model_pixel_size:.3f} µm/pixel\n")
-        f.write(f"**Minimum object diameter**: {config.min_diameter} pixels\n\n")
+        f.write(f"**Pixel size**: {config_bioimageio.model_pixel_size:.3f} µm/pixel\n")
+        f.write(f"**Minimum object diameter**: {config_bioimageio.min_diameter} pixels\n\n")
 
         # Citation
-        if config.citation_text or config.citation_doi:
+        if config_bioimageio.citation_text or config_bioimageio.citation_doi:
             f.write("## Citation\n")
-            if config.citation_text:
-                f.write(f"{config.citation_text}\n\n")
-            if config.citation_doi:
-                f.write(f"DOI: [{config.citation_doi}](https://doi.org/{config.citation_doi})\n\n")
+            if config_bioimageio.citation_text:
+                f.write(f"{config_bioimageio.citation_text}\n\n")
+            if config_bioimageio.citation_doi:
+                f.write(f"DOI: [{config_bioimageio.citation_doi}](https://doi.org/{config_bioimageio.citation_doi})\n\n")
 
         # Authors
-        if config.author_names:
+        if config_bioimageio.author_names:
             f.write("## Authors\n")
-            for author in config.author_names:
+            for author in config_bioimageio.author_names:
                 f.write(f"- {author}\n")
             f.write("\n")
 
@@ -148,28 +148,28 @@ def generate_and_save_custom_cover(
     print(f"Custom cover saved to {save_path}")
 
 
-def export_bioimageio(config: BioimageioExportConfig):
+def export_bioimageio(config_bioimageio: BioimageioExportConfig):
     """
     Export AimSegDL TorchScript model to a BioImage.IO package.
     """
-    os.makedirs(config.output_dir, exist_ok=True)
+    os.makedirs(config_bioimageio.output_dir, exist_ok=True)
 
     # Load model and wrap in pipeline
-    model = load_model(config.model_path, device="cpu")
+    model = load_model(config_bioimageio.model_path, device="cpu")
     model.eval()
     wrapped_model = Pipeline(model)
 
     # Prepare test input
-    img = np.array(Image.open(config.test_img_path)).astype(np.float32)
+    img = np.array(Image.open(config_bioimageio.test_img_path)).astype(np.float32)
     input_ = normalize(img)[None, None]  # [1, 1, H, W]
     input_tensor = torch.from_numpy(input_)
 
     # Script and save TorchScript model
     scripted_model = torch.jit.script(wrapped_model, input_tensor)
-    torch.jit.save(scripted_model, os.path.join(config.output_dir, "weights.pt"))
+    torch.jit.save(scripted_model, os.path.join(config_bioimageio.output_dir, "weights.pt"))
 
     # Save test input and output
-    np.save(os.path.join(config.output_dir, "test-input.npy"), input_tensor.detach().cpu().numpy())
+    np.save(os.path.join(config_bioimageio.output_dir, "test-input.npy"), input_tensor.detach().cpu().numpy())
     with torch.no_grad():
         output = scripted_model(input_tensor)
 
@@ -179,7 +179,7 @@ def export_bioimageio(config: BioimageioExportConfig):
     # Avoid fancy indexing issues — make sure it's a plain ndarray
     assert isinstance(output_np, np.ndarray) and output_np.ndim == 4
 
-    np.save(os.path.join(config.output_dir, "test-output.npy"), output_np)
+    np.save(os.path.join(config_bioimageio.output_dir, "test-output.npy"), output_np)
 
     # Confirm similarity
     expected = output.cpu().numpy()
@@ -190,7 +190,7 @@ def export_bioimageio(config: BioimageioExportConfig):
 
 
     # Write README inside output_dir
-    readme_filename = write_readme(config)
+    readme_filename = write_readme(config_bioimageio)
 
     # Define input
     input_descr = InputTensorDescr(
@@ -198,11 +198,11 @@ def export_bioimageio(config: BioimageioExportConfig):
         axes=[
             BatchAxis(),
             ChannelAxis(id=AxisId("channel"), channel_names=[Identifier("gray")]),
-            SpaceInputAxis(id=AxisId("y"), size=ParameterizedSize(min=512, step=1), scale=config.model_pixel_size, unit="micrometer"),
-            SpaceInputAxis(id=AxisId("x"), size=ParameterizedSize(min=512, step=1), scale=config.model_pixel_size, unit="micrometer"),
+            SpaceInputAxis(id=AxisId("y"), size=ParameterizedSize(min=512, step=1), scale=config_bioimageio.model_pixel_size, unit="micrometer"),
+            SpaceInputAxis(id=AxisId("x"), size=ParameterizedSize(min=512, step=1), scale=config_bioimageio.model_pixel_size, unit="micrometer"),
         ],
         data=IntervalOrRatioDataDescr(type="float32"),
-        test_tensor=FileDescr(source=os.path.join(config.output_dir, "test-input.npy"))
+        test_tensor=FileDescr(source=os.path.join(config_bioimageio.output_dir, "test-input.npy"))
     )
 
     # Define output
@@ -218,49 +218,52 @@ def export_bioimageio(config: BioimageioExportConfig):
                     Identifier("axon_distance")
                 ],
             ),
-            SpaceOutputAxis(id=AxisId("y"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("y")), scale=config.model_pixel_size, unit="micrometer"),
-            SpaceOutputAxis(id=AxisId("x"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("x")), scale=config.model_pixel_size, unit="micrometer"),
+            SpaceOutputAxis(id=AxisId("y"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("y")), scale=config_bioimageio.model_pixel_size, unit="micrometer"),
+            SpaceOutputAxis(id=AxisId("x"), size=SizeReference(tensor_id=TensorId("raw"), axis_id=AxisId("x")), scale=config_bioimageio.model_pixel_size, unit="micrometer"),
         ],
-        test_tensor=FileDescr(source=os.path.join(config.output_dir, "test-output.npy"))
+        test_tensor=FileDescr(source=os.path.join(config_bioimageio.output_dir, "test-output.npy"))
     )
 
 
     generate_and_save_custom_cover(
         input_image=input_,
         output_tensor=output,
-        min_diameter=config.min_diameter,
-        save_path=os.path.join(config.output_dir, "cover.png")
+        min_diameter=config_bioimageio.min_diameter,
+        save_path=os.path.join(config_bioimageio.output_dir, "cover.png")
     )
 
 
     #Define model
     model_descr = ModelDescr(
-        name=config.model_name,
-        version=config.model_version,
+        name=config_bioimageio.model_name,
+        version=config_bioimageio.model_version,
         description="AimSegDL TorchScript model for axon/fibre segmentation.",
-        authors=[Author(name=name) for name in config.author_names],
-        license=LicenseId(config.license_id),
-        documentation=RelativeFilePath(Path(config.output_dir).name + "/" + readme_filename),
-        covers=[os.path.join(config.output_dir, "cover.png")],
+        authors=[Author(name=name) for name in config_bioimageio.author_names],
+        license=LicenseId(config_bioimageio.license_id),
+        documentation=RelativeFilePath(Path(config_bioimageio.output_dir).name + "/" + readme_filename),
+        covers=[os.path.join(config_bioimageio.output_dir, "cover.png")],
         git_repo=HttpUrl("https://github.com/paucabar/aimseg-dl"),
         inputs=[input_descr],
         outputs=[output_descr],
         weights=WeightsDescr(
             torchscript=TorchscriptWeightsDescr(
-                source=RelativeFilePath(Path(config.output_dir).name + "/" +"weights.pt"),
+                source=RelativeFilePath(Path(config_bioimageio.output_dir).name + "/" +"weights.pt"),
                 pytorch_version=torch.__version__,
             )
         ),
-        cite=[CiteEntry(text=config.citation_text, doi=Doi(config.citation_doi))],  # TODO: update DOI
-        config={"min_diameter": config.min_diameter} # custom field
+        cite=[CiteEntry(text=config_bioimageio.citation_text, doi=Doi(config_bioimageio.citation_doi))],  # TODO: update DOI
+        config={
+            "pixel_size": config_bioimageio.model_pixel_size, # custom field
+            "min_diameter": config_bioimageio.min_diameter, # custom field
+            "predict_inner_tongue": config_bioimageio.predict_inner_tongue} # custom field
     )
 
     # Save model package
-    zip_path = Path(config.output_dir) / f"{config.model_name}-{config.model_version}.zip"
+    zip_path = Path(config_bioimageio.output_dir) / f"{config_bioimageio.model_name}-{config_bioimageio.model_version}.zip"
     package_path = save_bioimageio_package(model_descr, output_path=zip_path)
     print("Saved model package:", package_path)
 
     # Validate model
-    if config.validate:
+    if config_bioimageio.validate:
         summary = test_model(model_descr, weight_format="torchscript", test_tolerance=1e-2)
         summary.display()
