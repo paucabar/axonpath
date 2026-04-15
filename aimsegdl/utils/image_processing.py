@@ -191,8 +191,8 @@ def segment_instances_from_sdt(
         seed_mask = np.logical_and(distancemap_clipped >= threshold, valid_mask)
     
     seeds = label(seed_mask)
-    seeds = remove_small_objects(seeds, min_size=min_area, connectivity=1)
-    seeds = label(seeds)
+    seeds_mask = remove_small_objects(seeds > 0, max_size=max(0, min_area - 1), connectivity=1)
+    seeds = label(seeds_mask)
 
     # Watershed
     labels = watershed(-distancemap_clipped, markers=seeds, mask=valid_mask, connectivity=1, compactness=compactness)

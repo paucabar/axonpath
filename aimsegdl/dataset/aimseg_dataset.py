@@ -46,8 +46,7 @@ class AimSegDataset(Dataset):
         try:
             image = normalize(data["image"]).astype(np.float32)
 
-            mask_sem = data["mask_sem"]
-            np.putmask(mask_sem, mask_sem == 3, 2)
+            mask_sem = np.where(data["mask_sem"] == 3, 2, data["mask_sem"])
 
             masks = [
                 data["mask_fibre"],

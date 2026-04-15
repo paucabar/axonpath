@@ -100,7 +100,7 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     min_diameter_inner_tongue = min_diameter / 2
     radius = min_diameter_inner_tongue / 2
     min_area = int(np.pi * radius ** 2)
-    pred_inner_tongue = remove_small_objects(pred_inner_tongue, min_size=min_area, connectivity=1)
+    pred_inner_tongue = label(remove_small_objects(pred_inner_tongue > 0, max_size=max(0, min_area - 1), connectivity=1))
     pred_inner_tongue = fill_labels(pred_inner_tongue)
 
     # Ground truth

@@ -78,7 +78,7 @@ def load_model(model_path: str, device: str = "cuda" if torch.cuda.is_available(
     resolved_path = resolve_model_path(model_path)
 
     model = model_fn(device=device)
-    model.load_state_dict(torch.load(resolved_path, map_location=device))
+    model.load_state_dict(torch.load(resolved_path, map_location=device, weights_only=True))
     model.to(device)
     model.eval()
     return model
