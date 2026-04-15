@@ -32,6 +32,12 @@ def main():
         help="List of author names"
     )
     parser.add_argument(
+        "--predict_inner_tongue",
+        action="store_true",
+        default=False,
+        help="If passed, marks the model as predicting inner tongue (cylinder) in addition to fibre and axon"
+    )
+    parser.add_argument(
         "--validate",
         action="store_true",
         help="If passed, validates the exported BioImage.IO model"
@@ -48,6 +54,7 @@ def main():
         output_dir=args.output_dir,
         model_pixel_size=args.pixel_size,
         min_diameter=args.min_diameter,
+        predict_inner_tongue=args.predict_inner_tongue,
         citation_text=args.citation_text,
         citation_doi=args.citation_doi,
         author_names=args.author_names,

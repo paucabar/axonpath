@@ -55,7 +55,7 @@ def train(config: TrainingConfig):
     train_ds.populate_cache()
     val_ds.populate_cache()
 
-    norm_type = "group" if config.batch_size < 8 else "batch"
+    norm_type = "instance" if config.batch_size < 8 else "batch"
     model = model_fn(device, norm_type=norm_type)
 
     ce_loss = nn.CrossEntropyLoss()
@@ -124,6 +124,6 @@ def train(config: TrainingConfig):
     plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score)
 
     # Export torchscript model
-    export_model = model_fn(config.device)
+    export_model = model_fn(config.device, norm_type=norm_type)
     export_model.load_state_dict(torch.load("best_weights_model.pth", map_location=config.device, weights_only=True))
     export_torchscript_model(export_model, config.model_name + ".pt")

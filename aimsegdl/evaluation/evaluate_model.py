@@ -108,9 +108,9 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
     axon_results = pd.DataFrame(columns=columns)
     inner_tongue_results = pd.DataFrame(columns=columns)
 
-    for path in tqdm(dataset.tile_paths, desc="Evaluating tiles"):
+    for idx, path in enumerate(tqdm(dataset.tile_paths, desc="Evaluating tiles")):
         tile_name = os.path.splitext(os.path.basename(path))[0]
-        sample = dataset.__getitem__(dataset.tile_paths.index(path))
+        sample = dataset.__getitem__(idx)
         image, masks = sample
 
         pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device, min_diameter=min_diameter)
