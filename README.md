@@ -3,7 +3,7 @@
 AxonPath is a deep learning framework for axon and myelin segmentation and morphometric analysis across microscopy modalities.
 
 To learn more about the method, see the [paper – placeholder link] (preprint coming soon).
-For hands-on usage, refer to the [tutorial notebook](notebooks/AimSegDL_Tutorial_Pipeline.ipynb).
+For hands-on usage, refer to the [tutorial notebook](notebooks/AxonPath_Tutorial_Pipeline.ipynb).
 
 ## Installation
 
@@ -42,7 +42,7 @@ If your data is annotated in QuPath, you can export it directly in this format u
 Then run:
 
 ```
-python prepare_data.py --input datasets --output prepared_data --create_test_split
+python scripts/prepare_data.py --input datasets --output prepared_data --create_test_split
 ```
 
 This step will:
@@ -56,7 +56,7 @@ This step will:
 Train AxonPath on your prepared tiles:
 
 ```
-python train_model.py --train_dir prepared_data/train_tiles --val_dir prepared_data/val_tiles --num_epochs 200 --batch_size 8 --min_diameter 30.0 --model_name my_axonpath_model
+python scripts/train_model.py --train_dir prepared_data/train_tiles --val_dir prepared_data/val_tiles --num_epochs 200 --batch_size 8 --min_diameter 30.0 --model_name my_axonpath_model
 ```
 
 ### 3. Evaluate the trained model
@@ -64,14 +64,14 @@ python train_model.py --train_dir prepared_data/train_tiles --val_dir prepared_d
 Run model evaluation on the test set:
 
 ```
-python evaluate_model.py --test_dir prepared_data/test_tiles --model_path best_weights_model.pth --min_diameter 30.0 --output_csv Evaluation_Results --display_figure
+python scripts/evaluate_model.py --test_dir prepared_data/test_tiles --model_path best_weights_model.pth --min_diameter 30.0 --output_csv Evaluation_Results --display_figure
 ```
 
 See [`scripts/`](scripts/) for other available command-line examples.
 
 ## Example Usage (Full Pipeline Notebook)
 
-- Follow the [AimSegDL_Tutorial_Pipeline](notebooks/AimSegDL_Tutorial_Pipeline.ipynb) for a complete interactive demonstration:
+- Follow the [AxonPath_Tutorial_Pipeline](notebooks/AxonPath_Tutorial_Pipeline.ipynb) for a complete interactive demonstration:
   - Prepare data
   - Train model
   - Evaluate segmentation results
