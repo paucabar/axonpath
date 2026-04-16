@@ -21,7 +21,7 @@ conda env create -f envs/environment.yml
 conda activate axonpath
 ```
 
-The environment requires a CUDA-capable GPU. Tested with PyTorch 2.7.1 and CUDA 12.8. You may adjust the `pytorch-cuda` version in `envs/environment.yml` to match your drivers — see [https://pytorch.org/get-started/locally/](https://pytorch.org/get-started/locally/) for compatible combinations.
+Requires Python 3.11 and a CUDA-capable GPU for training. Tested with PyTorch 2.7.1 and CUDA 12.8. You may adjust the `pytorch-cuda` version in `envs/environment.yml` to match your drivers — see [https://pytorch.org/get-started/locally/](https://pytorch.org/get-started/locally/) for compatible combinations. Data preparation and inference can run on CPU.
 
 ## Quickstart (Command-Line Workflow)
 
