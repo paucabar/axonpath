@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
+import importlib.resources
 from pathlib import Path
-import pkg_resources
 from aimsegdl.transforms.custom_transforms import transforms_fn
 from aimsegdl.utils import (
     model_fn, get_datasets, get_loaders, load_checkpoint, save_checkpoint,
@@ -14,36 +14,28 @@ from aimsegdl.training.config import TrainingConfig
 from aimsegdl.export_utils.model_export import export_torchscript_model
 
 
-try:
-    # Use pkg_resources only if available
-    import pkg_resources
-except ImportError:
-    pkg_resources = None
-
 def get_pretrained_path(weight_name_or_path: str) -> str:
     """
     Return the full path to the specified pretrained weights file.
     - If a direct file path is provided and exists, it's returned as-is.
-    - Otherwise, it attempts to locate the file in the aimsegdl.weights package (for installed packages).
-    - If not found, and running in a development environment, it checks aimsegdl/weights/ folder manually.
+    - Otherwise, locates the file inside the installed aimsegdl.weights package.
+    - Falls back to aimsegdl/weights/ when running from source.
     """
-    # If it's an existing full path, return it
     if os.path.isfile(weight_name_or_path):
         return weight_name_or_path
 
-    # Try pkg_resources (for installed package)
-    if pkg_resources:
-        try:
-            return pkg_resources.resource_filename("aimsegdl.weights", weight_name_or_path + ".pth")
-        except Exception:
-            pass  # Fall back to dev mode
+    # Installed package: resolve via importlib.resources
+    try:
+        ref = importlib.resources.files("aimsegdl.weights").joinpath(weight_name_or_path + ".pth")
+        return str(ref)
+    except (TypeError, FileNotFoundError):
+        pass
 
-    # Fallback: Check local dev path (e.g., aimsegdl/weights/)
+    # Source tree fallback
     dev_weights_path = Path(__file__).resolve().parent.parent / "weights" / (weight_name_or_path + ".pth")
     if dev_weights_path.is_file():
         return str(dev_weights_path)
 
-    # Not found
     raise FileNotFoundError(f"Pretrained weights '{weight_name_or_path}' not found in package or local dev path.")
 
 

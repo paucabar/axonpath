@@ -1,5 +1,6 @@
 import torch
 import os
+import importlib.resources
 from pathlib import Path
 import numpy as np
 from typing import Tuple
@@ -46,9 +47,9 @@ def resolve_model_path(model_identifier: str) -> str:
 
     # Try package weights first
     try:
-        import pkg_resources
-        return pkg_resources.resource_filename("aimsegdl.weights", model_identifier + ".pth")
-    except Exception:
+        ref = importlib.resources.files("aimsegdl.weights").joinpath(model_identifier + ".pth")
+        return str(ref)
+    except (TypeError, FileNotFoundError):
         pass
 
     # Then try direct path
