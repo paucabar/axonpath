@@ -96,6 +96,11 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
 
     # Load test set
     dataset = AimSegDataset(test_dir)
+    if len(dataset) == 0:
+        raise ValueError(
+            f"No tiles found in '{test_dir}'. "
+            "Make sure you prepared data with create_test_split=True."
+        )
 
     # Init result DataFrames with proper columns
     columns = ["Image_Name", "Threshold", "F1", "Precision", "Recall", "Jaccard", "TP", "FP", "FN"]
@@ -103,9 +108,9 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
     axon_results = pd.DataFrame(columns=columns)
     inner_tongue_results = pd.DataFrame(columns=columns)
 
-    for path in tqdm(dataset.tile_paths, desc="Evaluating tiles"):
+    for idx, path in enumerate(tqdm(dataset.tile_paths, desc="Evaluating tiles")):
         tile_name = os.path.splitext(os.path.basename(path))[0]
-        sample = dataset.__getitem__(dataset.tile_paths.index(path))
+        sample = dataset.__getitem__(idx)
         image, masks = sample
 
         pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device, min_diameter=min_diameter)
@@ -116,7 +121,7 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
         radius = min_diameter_inner_tongue / 2
         min_area = int(np.pi * radius ** 2)
         pred_inner_tongue = fill_labels(pred_inner_tongue)
-        pred_inner_tongue = remove_small_objects(pred_inner_tongue, min_size=min_area, connectivity=1)
+        pred_inner_tongue = label(remove_small_objects(pred_inner_tongue > 0, max_size=max(0, min_area - 1), connectivity=1))
         mapped_inner_tongue = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
         #pred_fibre = remove_unmapped_labels(pred_fibre, mapped_inner_tongue)
 

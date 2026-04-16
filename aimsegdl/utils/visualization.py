@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import colorcet as cc
 
-mpl.use("TkAgg")
 
 def get_glasbey_cmap():
     l = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
@@ -147,8 +146,8 @@ def plot_iou_distributions(df, label):
 
     # Compute mean and confidence interval
     grouped = df.groupby("Threshold")["F1"]
-    mean_f1 = grouped.mean()
-    std_f1 = grouped.std()
+    mean_f1 = grouped.mean().astype(float)
+    std_f1 = grouped.std().astype(float)
     n = df["Image_Name"].nunique()
     ci95 = 1.96 * std_f1 / np.sqrt(n)  # 95% CI
 
@@ -188,7 +187,7 @@ def plot_iou_distributions_imagewise(df, label):
         ax.plot(group["Threshold"], group["F1"], alpha=0.4, linewidth=1)
 
     # Plot mean F1 line across images at each threshold
-    mean_f1 = df.groupby("Threshold")["F1"].mean()
+    mean_f1 = df.groupby("Threshold")["F1"].mean().astype(float)
     ax.plot(mean_f1.index, mean_f1.values, label="Mean F1", color="black", linewidth=2)
 
     ax.set_title(f"{label} F1 Scores Across IoU Thresholds")

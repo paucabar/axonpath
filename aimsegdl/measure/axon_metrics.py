@@ -191,7 +191,7 @@ def metrics_table(fibre_labels, inner_tongue_labels, pixel_size_um,
         circularity = (4 * pi * area_px / (perimeter ** 2)) if perimeter and perimeter > 0 else np.nan
         circularity = min(circularity, 1)
         solidity = getattr(region, "solidity", np.nan)
-        major_axis_length = getattr(region, "major_axis_length", np.nan) * px_um
+        major_axis_length = getattr(region, "axis_major_length", np.nan) * px_um
         eccentricity = getattr(region, "eccentricity", np.nan)
 
         # Spatial metrics

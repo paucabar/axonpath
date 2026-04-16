@@ -1,5 +1,6 @@
 import torch
 import os
+import importlib.resources
 from pathlib import Path
 import numpy as np
 from typing import Tuple
@@ -46,9 +47,9 @@ def resolve_model_path(model_identifier: str) -> str:
 
     # Try package weights first
     try:
-        import pkg_resources
-        return pkg_resources.resource_filename("aimsegdl.weights", model_identifier + ".pth")
-    except Exception:
+        ref = importlib.resources.files("aimsegdl.weights").joinpath(model_identifier + ".pth")
+        return str(ref)
+    except (TypeError, FileNotFoundError):
         pass
 
     # Then try direct path
@@ -78,7 +79,7 @@ def load_model(model_path: str, device: str = "cuda" if torch.cuda.is_available(
     resolved_path = resolve_model_path(model_path)
 
     model = model_fn(device=device)
-    model.load_state_dict(torch.load(resolved_path, map_location=device))
+    model.load_state_dict(torch.load(resolved_path, map_location=device, weights_only=True))
     model.to(device)
     model.eval()
     return model

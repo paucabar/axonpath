@@ -129,8 +129,8 @@ def generate_and_save_custom_cover(
     glasbey = get_glasbey_cmap()
     gray_rgb = cm.get_cmap("gray")(gray)[..., :3]
     semantic_rgb = cm.get_cmap("viridis")(semantic_classes / 2.0)[..., :3]
-    fibre_rgb = glasbey(fibre / fibre.max())[..., :3]
-    axon_rgb = glasbey(axon_mapped / axon_mapped.max())[..., :3]
+    fibre_rgb = glasbey(fibre / (fibre.max() or 1))[..., :3]
+    axon_rgb = glasbey(axon_mapped / (axon_mapped.max() or 1))[..., :3]
 
     # Stack all full-sized images into a blank canvas
     H, W = gray.shape
@@ -165,7 +165,7 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
     input_tensor = torch.from_numpy(input_)
 
     # Script and save TorchScript model
-    scripted_model = torch.jit.script(wrapped_model, input_tensor)
+    scripted_model = torch.jit.script(wrapped_model)
     torch.jit.save(scripted_model, os.path.join(config_bioimageio.output_dir, "weights.pt"))
 
     # Save test input and output
@@ -183,7 +183,7 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
 
     # Confirm similarity
     expected = output.cpu().numpy()
-    predicted = np.load("bioimageio_model/test-output.npy")
+    predicted = np.load(os.path.join(config_bioimageio.output_dir, "test-output.npy"))
 
     np.testing.assert_allclose(expected, predicted, rtol=1e-3, atol=1e-3)
     assert input_tensor.shape[2:] == output.shape[2:], "Input/output shape mismatch!"

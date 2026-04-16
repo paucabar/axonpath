@@ -11,10 +11,10 @@ from aimsegdl.dataset.aimseg_dataset import AimSegDataset
 def model_fn(device, norm_type="batch"):
     if norm_type == "batch":
         norm = Norm.BATCH
-    elif norm_type == "group":
+    elif norm_type == "instance":
         norm = Norm.INSTANCE
     else:
-        raise ValueError("Unsupported norm type: choose 'batch' or 'group'")
+        raise ValueError("Unsupported norm type: choose 'batch' or 'instance'")
 
     model = UNet(
         spatial_dims=2,

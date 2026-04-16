@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
+import importlib.resources
 from pathlib import Path
-import pkg_resources
 from aimsegdl.transforms.custom_transforms import transforms_fn
 from aimsegdl.utils import (
     model_fn, get_datasets, get_loaders, load_checkpoint, save_checkpoint,
@@ -14,36 +14,28 @@ from aimsegdl.training.config import TrainingConfig
 from aimsegdl.export_utils.model_export import export_torchscript_model
 
 
-try:
-    # Use pkg_resources only if available
-    import pkg_resources
-except ImportError:
-    pkg_resources = None
-
 def get_pretrained_path(weight_name_or_path: str) -> str:
     """
     Return the full path to the specified pretrained weights file.
     - If a direct file path is provided and exists, it's returned as-is.
-    - Otherwise, it attempts to locate the file in the aimsegdl.weights package (for installed packages).
-    - If not found, and running in a development environment, it checks aimsegdl/weights/ folder manually.
+    - Otherwise, locates the file inside the installed aimsegdl.weights package.
+    - Falls back to aimsegdl/weights/ when running from source.
     """
-    # If it's an existing full path, return it
     if os.path.isfile(weight_name_or_path):
         return weight_name_or_path
 
-    # Try pkg_resources (for installed package)
-    if pkg_resources:
-        try:
-            return pkg_resources.resource_filename("aimsegdl.weights", weight_name_or_path + ".pth")
-        except Exception:
-            pass  # Fall back to dev mode
+    # Installed package: resolve via importlib.resources
+    try:
+        ref = importlib.resources.files("aimsegdl.weights").joinpath(weight_name_or_path + ".pth")
+        return str(ref)
+    except (TypeError, FileNotFoundError):
+        pass
 
-    # Fallback: Check local dev path (e.g., aimsegdl/weights/)
+    # Source tree fallback
     dev_weights_path = Path(__file__).resolve().parent.parent / "weights" / (weight_name_or_path + ".pth")
     if dev_weights_path.is_file():
         return str(dev_weights_path)
 
-    # Not found
     raise FileNotFoundError(f"Pretrained weights '{weight_name_or_path}' not found in package or local dev path.")
 
 
@@ -55,14 +47,14 @@ def train(config: TrainingConfig):
     train_ds.populate_cache()
     val_ds.populate_cache()
 
-    norm_type = "group" if config.batch_size < 8 else "batch"
+    norm_type = "instance" if config.batch_size < 8 else "batch"
     model = model_fn(device, norm_type=norm_type)
 
     ce_loss = nn.CrossEntropyLoss()
     mse_loss = nn.MSELoss()
     loss_fns = [ce_loss, mse_loss]
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler(device)
 
     train_loss, val_loss = [], []
     f1_fibre, f1_axon, f1_inner_tongue = [], [], []
@@ -72,17 +64,17 @@ def train(config: TrainingConfig):
     if config.pretrained_weights:
         pretrained_path = get_pretrained_path(config.pretrained_weights)
         print(f"Loading pretrained weights from {pretrained_path}")
-        model.load_state_dict(torch.load(pretrained_path))
+        model.load_state_dict(torch.load(pretrained_path, map_location=device, weights_only=True))
     elif config.load_checkpoint:
         last_epoch, train_loss, val_loss, f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score, best_score = \
             load_checkpoint(torch.load("model_checkpoint.pth.tar", weights_only=False), model, optimizer)
+
+    train_loader, val_loader = get_loaders(train_ds, val_ds, config.batch_size, config.num_workers, config.pin_memory)
 
     for epoch in range(config.num_epochs):
         print(f"\nEpoch {epoch + 1}/{config.num_epochs}")
         if config.load_checkpoint:
             print(f"Total epoch {last_epoch + epoch + 1}/{last_epoch + config.num_epochs}")
-
-        train_loader, val_loader = get_loaders(train_ds, val_ds, config.batch_size, config.num_workers, config.pin_memory)
 
         t_loss = train_loop(train_loader, model, optimizer, loss_fns, scaler, device)
         train_loss.append(t_loss)
@@ -124,6 +116,6 @@ def train(config: TrainingConfig):
     plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score)
 
     # Export torchscript model
-    export_model = model_fn(config.device)
-    export_model.load_state_dict(torch.load(f"best_weights_model.pth"))
+    export_model = model_fn(config.device, norm_type=norm_type)
+    export_model.load_state_dict(torch.load("best_weights_model.pth", map_location=config.device, weights_only=True))
     export_torchscript_model(export_model, config.model_name + ".pt")

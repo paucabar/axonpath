@@ -46,8 +46,7 @@ class AimSegDataset(Dataset):
         try:
             image = normalize(data["image"]).astype(np.float32)
 
-            mask_sem = data["mask_sem"]
-            np.putmask(mask_sem, mask_sem == 3, 2)
+            mask_sem = np.where(data["mask_sem"] == 3, 2, data["mask_sem"])
 
             masks = [
                 data["mask_fibre"],
@@ -64,7 +63,7 @@ class AimSegDataset(Dataset):
                     masks = transformed["masks"]
                 except Exception as e:
                     print(f"[Worker {os.getpid()}] Transform failed: {e}")
-                    raise RuntimeError(f"Albumentations transform failed on {path}") from e
+                    raise RuntimeError(f"Transform failed on {path}") from e
 
             image_tensor = image if isinstance(image, torch.Tensor) else torch.from_numpy(image)
             masks_tensor = [

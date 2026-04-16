@@ -1,6 +1,5 @@
 import argparse
 import torch
-import time
 from aimsegdl.training.config import TrainingConfig
 from aimsegdl.training.train import train
 
@@ -55,4 +54,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    time.sleep(10)

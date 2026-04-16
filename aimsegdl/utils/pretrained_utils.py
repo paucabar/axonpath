@@ -1,6 +1,6 @@
-import pkg_resources
-import os
+import importlib.resources
+
 
 def list_pretrained_weights():
-    return [os.path.splitext(f)[0] for f in pkg_resources.resource_listdir("aimsegdl.weights", "")
-            if f.endswith(".pth")]
+    pkg = importlib.resources.files("aimsegdl.weights")
+    return [p.name[:-4] for p in pkg.iterdir() if p.name.endswith(".pth")]
