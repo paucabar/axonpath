@@ -61,7 +61,7 @@ class LabelDistanceTransforms:
         using bounding boxes for efficiency.
         """
         boundary_dt = np.zeros_like(image, dtype=float)
-        skeleton_dt = np.zeros_like(image, dtype=float)
+        skel_dist = np.zeros_like(image, dtype=float)
 
         for region in self.regions:
             label_id = region.label
@@ -73,19 +73,19 @@ class LabelDistanceTransforms:
             if self.fill_gt:
                 cropped_mask = self._fill_mask(cropped_mask)
 
-            # Boundary distance transform
-            bdt_crop = edt.edt(cropped_mask, black_border=False, parallel=2)
+            # Boundary distance transform — pad with False so objects that fill
+            # their bbox (e.g. perfect rectangles) don't produce inf values
+            padded_mask = np.pad(cropped_mask, 1, mode='constant', constant_values=False)
+            bdt_padded = edt.edt(padded_mask, black_border=False, parallel=2)
+            bdt_crop = bdt_padded[1:-1, 1:-1]
             boundary_dt[min_row:max_row, min_col:max_col][cropped_mask] = bdt_crop[cropped_mask]
 
-            # Skeleton distance transform
+            # Distance to skeleton
             skeleton_crop = self._compute_skeleton(cropped_mask)
-            inv_skel_crop = ~skeleton_crop
-            sdt_crop = edt.edt(inv_skel_crop, black_border=False, parallel=2)
-            sdt_crop_masked = sdt_crop * cropped_mask
-            skeleton_dt[min_row:max_row, min_col:max_col][cropped_mask] = sdt_crop_masked[cropped_mask]
+            skel_dist_crop = edt.edt(~skeleton_crop, black_border=False, parallel=2)
+            skel_dist[min_row:max_row, min_col:max_col][cropped_mask] = (skel_dist_crop * cropped_mask)[cropped_mask]
 
-
-        return boundary_dt, skeleton_dt
+        return boundary_dt, skel_dist
 
     def _compute_background_transforms(self, image: ndarray):
         """
@@ -93,8 +93,8 @@ class LabelDistanceTransforms:
         """
         background_mask = (image == 0)
         labeled_background = label(background_mask.astype(np.uint8))
-        bdt, sdt = self._compute_distance_transforms(labeled_background)
-        sadt_background = self.__safe_divide_images(bdt, bdt + sdt) ** self.alpha
+        bdt, skel_dist = self._compute_distance_transforms(labeled_background)
+        sadt_background = self.__safe_divide_images(bdt, bdt + skel_dist) ** self.alpha
         return sadt_background
 
     def _get_background_mask(self, image: ndarray):
@@ -102,20 +102,25 @@ class LabelDistanceTransforms:
 
     def skeleton_aware_dist_trans(self):
         """
-        Compute the skeleton-aware distance transform (SADT) function.
+        Compute the skeleton-aware distance transform (SDT).
+
         Returns:
-            sadt_function (ndarray): Final skeleton-aware function.
-            bdt (ndarray): Boundary distance transform.
-            sdt (ndarray): Skeleton distance transform.
+            sdt (ndarray): Skeleton-aware distance transform. Values in [0, 1]
+                inside objects (0 at boundary, 1 at skeleton), -1 in background
+                when signed_background=True.
+            bdt (ndarray): Boundary distance transform (EDT from each pixel to
+                the nearest object boundary).
+            skel_dist (ndarray): Distance-to-skeleton transform (EDT from each
+                pixel to the nearest skeleton pixel).
         """
-        bdt, sdt = self._compute_distance_transforms(self.label_image)
-        sadt_function = self.__safe_divide_images(bdt, bdt + sdt) ** self.alpha
+        bdt, skel_dist = self._compute_distance_transforms(self.label_image)
+        sdt = self.__safe_divide_images(bdt, bdt + skel_dist) ** self.alpha
 
         if self.background_transform:
             sadt_background = self._compute_background_transforms(self.label_image)
-            sadt_function = sadt_function - sadt_background
+            sdt = sdt - sadt_background
 
         if self.signed_background:
-            sadt_function[self._get_background_mask(self.label_image)] = -1
+            sdt[self._get_background_mask(self.label_image)] = -1
 
-        return sadt_function, bdt, sdt
+        return sdt, bdt, skel_dist
