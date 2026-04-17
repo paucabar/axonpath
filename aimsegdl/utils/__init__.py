@@ -1,5 +1,7 @@
 from .visualization import (
     get_glasbey_cmap,
+    get_semantic_cmap,
+    get_sdt_cmap,
     apply_cmap,
     show_images,
     loss_plot_fn,
