@@ -1,4 +1,6 @@
 import os
+import json
+import hashlib
 from skimage import io
 from glob import glob
 import random
@@ -8,6 +10,29 @@ from skimage.measure import label
 from skimage.segmentation import clear_border
 from aimsegdl.utils.image_processing import fill_labels
 from aimsegdl.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
+
+_MANIFEST_FILE = "manifest.json"
+
+
+def _hash_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _load_manifest(out_root: str) -> dict:
+    manifest_path = os.path.join(out_root, _MANIFEST_FILE)
+    if os.path.exists(manifest_path):
+        with open(manifest_path) as f:
+            return json.load(f)
+    return {"sources": {}}
+
+
+def _save_manifest(out_root: str, manifest: dict) -> None:
+    with open(os.path.join(out_root, _MANIFEST_FILE), "w") as f:
+        json.dump(manifest, f, indent=2)
 
 
 def shuffle_tuples_in_list(list1, list2, list3):
@@ -116,12 +141,30 @@ def split_tiles(tiles, create_test_split=True):
 
 def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=True):
     os.makedirs(out_root, exist_ok=True)
+
+    # Guard: abort if tiles exist without a manifest (pre-manifest prepared data)
+    existing_tiles = glob(os.path.join(out_root, "*_tiles", "*.npy"))
+    manifest_path = os.path.join(out_root, _MANIFEST_FILE)
+    if existing_tiles and not os.path.exists(manifest_path):
+        print(
+            f"ERROR: {out_root} contains prepared tiles but no manifest. "
+            "Re-running would create duplicate tiles. "
+            "Use --overwrite to delete all existing output and reprocess from scratch."
+        )
+        return
+
+    manifest = _load_manifest(out_root)
     summary_records = []
     tile_records = []
 
     for dataset in os.listdir(in_root):
         dataset_path = os.path.join(in_root, dataset)
         if not os.path.isdir(dataset_path):
+            continue
+
+        dataset_key = os.path.realpath(dataset_path)
+        if dataset_key in manifest["sources"]:
+            print(f"Skipping {dataset} (already in manifest - use --overwrite to reprocess).")
             continue
 
         image_paths = sorted(glob(os.path.join(dataset_path, 'images', '*.tif')))
@@ -233,6 +276,24 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
                 stats.get('test_count', 0),
             ])
 
+        # Compute source file hashes and record in manifest
+        all_source_files = image_paths + mask_paths + label_paths
+        source_file_hashes = {}
+        for fp in all_source_files:
+            rel = os.path.relpath(fp, dataset_path)
+            source_file_hashes[rel] = _hash_file(fp)
+
+        total_saved_tiles = sum(
+            tile_counts[bn].get("train_count", 0) +
+            tile_counts[bn].get("val_count", 0) +
+            tile_counts[bn].get("test_count", 0)
+            for bn in tile_counts
+        )
+        manifest["sources"][dataset_key] = {
+            "tile_count": total_saved_tiles,
+            "source_file_hashes": source_file_hashes,
+        }
+        _save_manifest(out_root, manifest)
         print(f"Finished dataset: {dataset}\n")
 
     summary_path = os.path.join(out_root, "dataset_summary.tsv")

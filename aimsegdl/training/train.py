@@ -1,9 +1,14 @@
+import json
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
 import importlib.resources
+import numpy as np
+from dataclasses import asdict
 from pathlib import Path
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from aimsegdl.transforms.custom_transforms import transforms_fn
 from aimsegdl.utils import (
     model_fn, get_datasets, get_loaders, load_checkpoint, save_checkpoint,
@@ -42,14 +47,27 @@ def get_pretrained_path(weight_name_or_path: str) -> str:
 
 
 def train(config: TrainingConfig):
+    os.makedirs(config.output_dir, exist_ok=True)
+
+    if config.seed is not None:
+        torch.manual_seed(config.seed)
+        torch.cuda.manual_seed_all(config.seed)
+        np.random.seed(config.seed)
+        random.seed(config.seed)
+
     device = config.device
+    norm_type = "instance" if config.batch_size < 8 else "batch"
+
+    config_dict = asdict(config)
+    config_dict["norm_type"] = norm_type
+    with open(os.path.join(config.output_dir, "training_config.json"), "w") as f:
+        json.dump(config_dict, f, indent=2)
 
     train_tf, val_tf = transforms_fn(config.image_height, config.image_width)
     train_ds, val_ds = get_datasets(config.train_dir, config.val_dir, train_tf, val_tf)
     train_ds.populate_cache()
     val_ds.populate_cache()
 
-    norm_type = "instance" if config.batch_size < 8 else "batch"
     model = model_fn(device, norm_type=norm_type)
 
     ce_loss = nn.CrossEntropyLoss()
@@ -58,18 +76,29 @@ def train(config: TrainingConfig):
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     scaler = torch.amp.GradScaler(device)
 
+    scheduler = None
+    if config.use_lr_scheduler:
+        scheduler = ReduceLROnPlateau(optimizer, factor=0.5, patience=50, min_lr=1e-6)
+
     train_loss, val_loss = [], []
     f1_fibre, f1_axon, f1_inner_tongue = [], [], []
     balanced_seg_score, best_score = [], 0
     last_epoch = 0
 
+    checkpoint_path = os.path.join(config.output_dir, "model_checkpoint.pth.tar")
+    best_weights_path = os.path.join(config.output_dir, "best_weights_model.pth")
+    last_weights_path = os.path.join(config.output_dir, "last_epoch_model.pth")
+
     if config.pretrained_weights:
         pretrained_path = get_pretrained_path(config.pretrained_weights)
         print(f"Loading pretrained weights from {pretrained_path}")
-        model.load_state_dict(torch.load(pretrained_path, map_location=device, weights_only=True))
+        model.load_state_dict(torch.load(pretrained_path, map_location=device, weights_only=True)["state_dict"])
     elif config.load_checkpoint:
+        checkpoint = torch.load(checkpoint_path, weights_only=False)
         last_epoch, train_loss, val_loss, f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score, best_score = \
-            load_checkpoint(torch.load("model_checkpoint.pth.tar", weights_only=False), model, optimizer)
+            load_checkpoint(checkpoint, model, optimizer)
+        if scheduler is not None and "scheduler" in checkpoint and checkpoint["scheduler"] is not None:
+            scheduler.load_state_dict(checkpoint["scheduler"])
 
     train_loader, val_loader = get_loaders(train_ds, val_ds, config.batch_size, config.num_workers, config.pin_memory)
 
@@ -93,15 +122,19 @@ def train(config: TrainingConfig):
         score = (f1_fib + f1_ax + f1_in) / 3
         balanced_seg_score.append(score)
 
+        if scheduler is not None:
+            scheduler.step(v_loss)
+
         print(f"Train: {t_loss:.4f} | Val: {v_loss:.4f} | F1 Fibre: {f1_fib:.4f} | F1 Axon: {f1_ax:.4f} | F1 InTo: {f1_in:.4f} | Balanced Segmentation Score: {score:.4f}")
 
         if score > best_score:
             best_score = score
-            torch.save({"state_dict": model.state_dict(), "norm_type": norm_type}, "best_weights_model.pth")
+            torch.save({"state_dict": model.state_dict(), "norm_type": norm_type}, best_weights_path)
 
         save_checkpoint({
             "state_dict": model.state_dict(),
             "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict() if scheduler is not None else None,
             "norm_type": norm_type,
             "epoch": epoch + 1 + last_epoch,
             "train_loss": train_loss,
@@ -111,14 +144,14 @@ def train(config: TrainingConfig):
             "f1_inner_tongue": f1_inner_tongue,
             "balanced_segmentation_score": balanced_seg_score,
             "best_score": best_score,
-        })
+        }, filename=checkpoint_path)
 
-    torch.save({"state_dict": model.state_dict(), "norm_type": norm_type}, "last_epoch_model.pth")
-    loss_plot_fn(train_loss, val_loss)
-    loss_plot_log_fn(train_loss, val_loss)
-    plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score)
+    torch.save({"state_dict": model.state_dict(), "norm_type": norm_type}, last_weights_path)
+    loss_plot_fn(train_loss, val_loss, output_dir=config.output_dir)
+    loss_plot_log_fn(train_loss, val_loss, output_dir=config.output_dir)
+    plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score, output_dir=config.output_dir)
 
     # Export torchscript model
     export_model = model_fn(config.device, norm_type=norm_type)
-    export_model.load_state_dict(torch.load("best_weights_model.pth", map_location=config.device, weights_only=True)["state_dict"])
-    export_torchscript_model(export_model, config.model_name + ".pt")
+    export_model.load_state_dict(torch.load(best_weights_path, map_location=config.device, weights_only=True)["state_dict"])
+    export_torchscript_model(export_model, os.path.join(config.output_dir, config.model_name + ".pt"))

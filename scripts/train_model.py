@@ -25,6 +25,9 @@ def main():
     parser.add_argument("--pretrained_weights", type=str, default=None, help="Path to .pth file or model name")
     parser.add_argument("--load_checkpoint", action="store_true", help="Resume from checkpoint")
     parser.add_argument("--model_name", type=str, default=TrainingConfig.model_name, help="Name for saving model and logs")
+    parser.add_argument("--output_dir", type=str, default=TrainingConfig.output_dir, help="Directory for all training outputs")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
+    parser.add_argument("--no_lr_scheduler", action="store_true", help="Disable ReduceLROnPlateau learning rate scheduler")
 
     args = parser.parse_args()
 
@@ -46,6 +49,9 @@ def main():
         pretrained_weights=args.pretrained_weights,
         load_checkpoint=args.load_checkpoint,
         model_name=args.model_name,
+        output_dir=args.output_dir,
+        seed=args.seed,
+        use_lr_scheduler=not args.no_lr_scheduler,
     )
 
     # Train

@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -57,7 +58,7 @@ def show_images(*images, titles=None, cmaps=None, n_cols=3, figsize=(15, 10)):
     #plt.pause(0.01)
 
 
-def loss_plot_fn(train_loss, val_loss):
+def loss_plot_fn(train_loss, val_loss, output_dir="."):
     print("\n----------------------------------------------------------------------------")
     print("\nTraining and validation loss")
 
@@ -73,12 +74,12 @@ def loss_plot_fn(train_loss, val_loss):
 
     fig.set_facecolor('white')
     fig.tight_layout()
-    fig.savefig('loss_plot.pdf', bbox_inches='tight', dpi=300)
+    fig.savefig(os.path.join(output_dir, 'loss_plot.pdf'), bbox_inches='tight', dpi=300)
     plt.show(block=False)
     plt.pause(0.01)
 
 
-def loss_plot_log_fn(train_loss, val_loss):
+def loss_plot_log_fn(train_loss, val_loss, output_dir="."):
     print("\n----------------------------------------------------------------------------")
     print("\nTraining and validation loss (log)")
 
@@ -95,13 +96,12 @@ def loss_plot_log_fn(train_loss, val_loss):
 
     fig.set_facecolor("white")
     fig.tight_layout()
-    fig.savefig("loss_plot_log.pdf", bbox_inches="tight", dpi=300)
+    fig.savefig(os.path.join(output_dir, "loss_plot_log.pdf"), bbox_inches="tight", dpi=300)
     plt.show(block=False)
     plt.pause(0.01)
 
 
-
-def plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_segmentation_score):
+def plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_segmentation_score, output_dir="."):
     print("\n----------------------------------------------------------------------------")
     print("Segmentation metric trends over epochs")
 
@@ -129,7 +129,7 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg
 
     fig.set_facecolor('white')
     fig.tight_layout()
-    fig.savefig("segmentation_scores_plot.pdf", bbox_inches='tight', dpi=300)
+    fig.savefig(os.path.join(output_dir, "segmentation_scores_plot.pdf"), bbox_inches='tight', dpi=300)
     plt.show(block=False)
     plt.pause(0.01)
 
