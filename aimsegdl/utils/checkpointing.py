@@ -8,7 +8,7 @@ def load_checkpoint(checkpoint, model, optimizer):
     model.load_state_dict(checkpoint["state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     last_epoch = checkpoint['epoch']
-    train_loss = checkpoint['train_loss'] 
+    train_loss = checkpoint['train_loss']
     val_loss = checkpoint['val_loss']
     f1_fibre = checkpoint['f1_fibre']
     f1_axon = checkpoint['f1_axon']

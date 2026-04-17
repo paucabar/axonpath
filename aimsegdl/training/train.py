@@ -27,7 +27,9 @@ def get_pretrained_path(weight_name_or_path: str) -> str:
     # Installed package: resolve via importlib.resources
     try:
         ref = importlib.resources.files("aimsegdl.weights").joinpath(weight_name_or_path + ".pth")
-        return str(ref)
+        path = str(ref)
+        if os.path.isfile(path):
+            return path
     except (TypeError, FileNotFoundError):
         pass
 
@@ -95,11 +97,12 @@ def train(config: TrainingConfig):
 
         if score > best_score:
             best_score = score
-            torch.save(model.state_dict(), "best_weights_model.pth")
+            torch.save({"state_dict": model.state_dict(), "norm_type": norm_type}, "best_weights_model.pth")
 
         save_checkpoint({
             "state_dict": model.state_dict(),
             "optimizer": optimizer.state_dict(),
+            "norm_type": norm_type,
             "epoch": epoch + 1 + last_epoch,
             "train_loss": train_loss,
             "val_loss": val_loss,
@@ -110,12 +113,12 @@ def train(config: TrainingConfig):
             "best_score": best_score,
         })
 
-    torch.save(model.state_dict(), "last_epoch_model.pth")
+    torch.save({"state_dict": model.state_dict(), "norm_type": norm_type}, "last_epoch_model.pth")
     loss_plot_fn(train_loss, val_loss)
     loss_plot_log_fn(train_loss, val_loss)
     plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score)
 
     # Export torchscript model
     export_model = model_fn(config.device, norm_type=norm_type)
-    export_model.load_state_dict(torch.load("best_weights_model.pth", map_location=config.device, weights_only=True))
+    export_model.load_state_dict(torch.load("best_weights_model.pth", map_location=config.device, weights_only=True)["state_dict"])
     export_torchscript_model(export_model, config.model_name + ".pt")

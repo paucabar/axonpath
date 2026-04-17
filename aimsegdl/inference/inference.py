@@ -45,18 +45,20 @@ def resolve_model_path(model_identifier: str) -> str:
         FileNotFoundError: If the file cannot be found.
     """
 
-    # Try package weights first
-    try:
-        ref = importlib.resources.files("aimsegdl.weights").joinpath(model_identifier + ".pth")
-        return str(ref)
-    except (TypeError, FileNotFoundError):
-        pass
-
-    # Then try direct path
+    # Direct path takes priority — avoids false matches against package weights
     if os.path.isfile(model_identifier):
         return model_identifier
 
-    # Try dev path
+    # Try built-in package weights (name only, no extension)
+    try:
+        ref = importlib.resources.files("aimsegdl.weights").joinpath(model_identifier + ".pth")
+        path = str(ref)
+        if os.path.isfile(path):
+            return path
+    except (TypeError, FileNotFoundError):
+        pass
+
+    # Dev-tree fallback (running from source without install)
     dev_path = Path(__file__).resolve().parent.parent / "weights" / (model_identifier + ".pth")
     if dev_path.is_file():
         return str(dev_path)
@@ -75,11 +77,11 @@ def load_model(model_path: str, device: str = "cuda" if torch.cuda.is_available(
     Returns:
         torch.nn.Module: The loaded model in eval mode.
     """
-    # Resolve full path
     resolved_path = resolve_model_path(model_path)
-
-    model = model_fn(device=device)
-    model.load_state_dict(torch.load(resolved_path, map_location=device, weights_only=True))
+    checkpoint = torch.load(resolved_path, map_location=device, weights_only=True)
+    norm_type = checkpoint["norm_type"]
+    model = model_fn(device=device, norm_type=norm_type)
+    model.load_state_dict(checkpoint["state_dict"])
     model.to(device)
     model.eval()
     return model
