@@ -96,7 +96,8 @@ def run_inference(
     axon_threshold: float=0.5,
     min_diameter: float=30.0,
     sw_batch_size=1,
-    overlap=0.5
+    overlap=0.5,
+    predict_inner_tongue: bool=True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Inference using a PyTorch model (from .pth) with MONAI's sliding window inference.
@@ -108,10 +109,11 @@ def run_inference(
         roi_size (tuple): Sliding window size.
         sw_batch_size (int): Sliding window batch size.
         overlap (float): Overlap between windows.
+        predict_inner_tongue (bool): If False, skip axon/inner-cylinder postprocessing.
 
     Returns:
         labels_fibre (np.ndarray): Fibre instance labels.
-        labels_axon (np.ndarray): Axon instance labels.
+        labels_axon (np.ndarray): Axon instance labels, or None if predict_inner_tongue=False.
         semantic (np.ndarray): Semantic segmentation map.
     """
     model.eval()
@@ -144,9 +146,11 @@ def run_inference(
 
     # Instance segmentation
     labels_fibre = segment_instances_from_sdt(distancemap=dt_fibre, threshold=fibre_threshold, min_diameter=min_diameter, valid_mask=None, seed_mask=None)
-    labels_axon = segment_instances_from_sdt(dt_axon, axon_threshold, min_axon_diameter)
 
-    # Axon mapping
+    if not predict_inner_tongue:
+        return labels_fibre, None, semantic
+
+    labels_axon = segment_instances_from_sdt(dt_axon, axon_threshold, min_axon_diameter)
     mapped_axons = map_axon_labels_to_fibres(labels_fibre, labels_axon)
 
     return labels_fibre, mapped_axons, semantic
