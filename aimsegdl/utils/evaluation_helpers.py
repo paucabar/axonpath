@@ -21,7 +21,8 @@ def evaluate(
     fibre_threshold: float = 0.5,
     axon_threshold: float = 0.5,
     min_diameter: float = 30.0,
-    show_results: bool = False
+    show_results: bool = False,
+    output_dir: str = ".",
 ):
     """
     Evaluate the model on the given loader with F1, Dice and loss metrics.
@@ -74,7 +75,7 @@ def evaluate(
         dice_metric.reset()
 
         if show_results:
-            plot_example(x[0], y[0], prediction[0], fibre_threshold, axon_threshold, min_diameter, axon_min_diameter)
+            plot_example(x[0], y[0], prediction[0], fibre_threshold, axon_threshold, min_diameter, axon_min_diameter, output_dir=output_dir)
 
     model.train()
 
@@ -119,7 +120,7 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     return f1_fibre, f1_axon, f1_inner_tongue
 
 
-def plot_example(x, y, pred, fibre_threshold, axon_threshold, min_diameter, axon_min_diameter):
+def plot_example(x, y, pred, fibre_threshold, axon_threshold, min_diameter, axon_min_diameter, output_dir="."):
     sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
     labels_fibre = segment_instances_from_sdt(pred[3].unsqueeze(0), fibre_threshold, min_diameter)
     labels_axon = segment_instances_from_sdt(pred[4].unsqueeze(0), axon_threshold, axon_min_diameter)
@@ -136,8 +137,9 @@ def plot_example(x, y, pred, fibre_threshold, axon_threshold, min_diameter, axon
         ],
         cmaps=[
             "gray", "glasbey", "glasbey",
-            "viridis", "magma", "magma",
+            "viridis", "sdt", "sdt",
             "viridis", "glasbey", "glasbey"
         ],
-        n_cols=3
+        n_cols=3,
+        output_dir=output_dir,
     )
