@@ -90,7 +90,7 @@ def plot_summary_bar(overall_metrics: pd.Series, title_tag: str):
     plt.tight_layout()
     plt.show()
 
-def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output_csv=None, display_figure=False, show_plots=True):
+def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output_csv=None, display_figure=False, show_plots=True, output_dir="."):
     # Load model
     model = load_model(model_path, device=device)
 
@@ -181,8 +181,8 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
         print(f"\nSaved results to:\n- {fibre_path}\n- {axon_path}\n- {inner_tongue_path}")
 
     if show_plots:
-        plot_iou_distributions(fibre_results, label="Fibre")
-        plot_iou_distributions(axon_results, label="Axon")
-        plot_iou_distributions(inner_tongue_results, label="Inner_Tongue")
+        plot_iou_distributions(fibre_results, label="Fibre", output_dir=output_dir)
+        plot_iou_distributions(axon_results, label="Axon", output_dir=output_dir)
+        plot_iou_distributions(inner_tongue_results, label="Inner_Tongue", output_dir=output_dir)
 
     return fibre_results, axon_results, inner_tongue_results

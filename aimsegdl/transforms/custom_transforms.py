@@ -266,21 +266,30 @@ class GaussNoise:
 
 
 class Defocus:
-    """Approximate out-of-focus blur using a Gaussian filter."""
+    """
+    Approximate out-of-focus blur using a uniform (box) filter.
 
-    def __init__(self, sigma_range=(1.0, 3.0), p=0.5):
-        self.sigma_range = sigma_range
+    A box blur is a better approximation of optical defocus than a Gaussian,
+    and is genuinely distinct from GaussianBlur inside OneOf.
+    size_range: odd integers to sample from (e.g. 3, 5, 7).
+    """
+
+    def __init__(self, size_range=(3, 7), p=0.5):
+        self.size_range = size_range
         self.p = p
 
     def __call__(self, image, masks):
         if random.random() > self.p:
             return image, masks
-        sigma = random.uniform(*self.sigma_range)
+        # Sample an odd kernel size
+        lo, hi = self.size_range
+        candidates = [s for s in range(lo, hi + 1, 2)]
+        size = random.choice(candidates) if candidates else lo
         if image.ndim == 2:
-            blurred = ndimage.gaussian_filter(image, sigma=sigma)
+            blurred = ndimage.uniform_filter(image, size=size)
         else:
             blurred = np.stack(
-                [ndimage.gaussian_filter(image[..., c], sigma=sigma) for c in range(image.shape[2])],
+                [ndimage.uniform_filter(image[..., c], size=size) for c in range(image.shape[2])],
                 axis=-1,
             )
         return blurred.astype(np.float32), masks
@@ -375,7 +384,7 @@ def transforms_fn(img_height, img_width):
             GaussianBlur(sigma_range=(0.5, 2.0), p=1.0),
             MedianBlur(size=3, p=1.0),
             GaussNoise(var_limit=(0.002, 0.01), p=1.0),
-            Defocus(sigma_range=(1.0, 3.0), p=1.0),
+            Defocus(size_range=(3, 7), p=1.0),
         ], p=0.25),
         ColorJitter(brightness=0.3, contrast=0.3, p=0.25),
         RandomGamma(gamma_range=(0.8, 1.2), p=0.25),

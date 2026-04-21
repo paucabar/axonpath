@@ -68,11 +68,11 @@ def tile_image(image, tile_h, tile_w):
     return tiles
 
 
-def apply_padding(im, pad_h, pad_w):
+def apply_padding(im, pad_h, pad_w, fill_value=0):
     if im.ndim == 3:
-        return np.pad(im, ((0, pad_h), (0, pad_w), (0, 0)), mode='constant')
+        return np.pad(im, ((0, pad_h), (0, pad_w), (0, 0)), mode='constant', constant_values=fill_value)
     else:
-        return np.pad(im, ((0, pad_h), (0, pad_w)), mode='constant')
+        return np.pad(im, ((0, pad_h), (0, pad_w)), mode='constant', constant_values=fill_value)
 
 
 def fix_label_edge_padding(fibre_lbl, axon_lbl, mask_sem):
@@ -182,6 +182,15 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
 
         for img_path, msk_path, lbl_path in zip(image_paths, mask_paths, label_paths):
             img = io.imread(img_path).astype(np.float32)
+
+            # Warn and convert accidental RGB inputs to grayscale
+            if img.ndim == 3:
+                print(
+                    f"  WARNING: {os.path.basename(img_path)} loaded as RGB ({img.shape}). "
+                    "Converting to grayscale (mean of channels). Check that this is intended."
+                )
+                img = img.mean(axis=2).astype(np.float32)
+
             mask = io.imread(msk_path).astype(np.uint8)
             axon_mask = (mask == 3).astype(np.uint8)
             label_raw = io.imread(lbl_path).astype(np.uint16)
@@ -191,12 +200,12 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
                 label_raw, axon_mask, mask, _ = fix_label_edge_padding(label_raw, axon_mask, mask)
 
             # Fill fibre labels
-            filled_label = fill_labels(label_raw.astype(np.int16))
+            filled_label = fill_labels(label_raw.astype(np.int32))
             unique_values = np.unique(filled_label)
             num_fibers = len(unique_values[unique_values != 0])
 
             # Fill axon labels
-            axon_instance = fill_labels(label(axon_mask.astype(np.int16)))
+            axon_instance = fill_labels(label(axon_mask.astype(np.int32)))
 
             # Compute SDTs
             sdt_fibre, _, _ = LabelDistanceTransforms(filled_label, 0.3, False, False, True).skeleton_aware_dist_trans()
@@ -205,12 +214,18 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
             h, w = label_raw.shape
             tile_h, tile_w, pad_h, pad_w = compute_tile_size(h, w)
 
+            if h < 512 or w < 512:
+                raise ValueError(
+                    f"Source image '{os.path.basename(img_path)}' is {h}x{w}, which is smaller "
+                    "than the minimum tile size (512x512). Resize or remove it from the dataset."
+                )
+
             img_padded = apply_padding(img, pad_h, pad_w)
             mask_padded = apply_padding(mask, pad_h, pad_w)
             label_padded = apply_padding(filled_label, pad_h, pad_w)
             axon_instance_padded = apply_padding(axon_instance, pad_h, pad_w)
-            sdt_fibre_padded = apply_padding(sdt_fibre, pad_h, pad_w)
-            sdt_axon_padded = apply_padding(sdt_axon, pad_h, pad_w)
+            sdt_fibre_padded = apply_padding(sdt_fibre, pad_h, pad_w, fill_value=-1)
+            sdt_axon_padded = apply_padding(sdt_axon, pad_h, pad_w, fill_value=-1)
 
             img_tiles = tile_image(img_padded, tile_h, tile_w)
             mask_tiles = tile_image(mask_padded, tile_h, tile_w)
@@ -227,10 +242,10 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
             for i, (im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile) in enumerate(
                 zip(img_tiles, mask_tiles, label_tiles, axon_tiles, sdt_fibre_tiles, sdt_axon_tiles)
             ):
-                if not np.any(clear_border(lbl_tile) > 0):
+                if not np.any(clear_border(lbl_tile, connectivity=2) > 0):
                     continue
 
-                tile_name = f"{base_name}_tile{valid_count}"
+                tile_name = f"{dataset}_{base_name}_tile{valid_count}"
                 all_tiles.append((tile_name, im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile, dataset, base_name))
                 valid_count += 1
 
