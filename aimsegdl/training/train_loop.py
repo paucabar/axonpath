@@ -3,7 +3,7 @@ from tqdm import tqdm
 import numpy as np
 from aimsegdl.utils.losses import compute_loss
 
-def train_loop(loader, model, optimizer, loss_fns, scaler, device):
+def train_loop(loader, model, optimizer, loss_fns, scaler, device, loss_weights=(1.0, 1.0, 1.0)):
     loop = tqdm(loader)
     train_loss_all = []
 
@@ -13,7 +13,7 @@ def train_loop(loader, model, optimizer, loss_fns, scaler, device):
 
         with torch.amp.autocast(device_type=device):
             predictions = model(data).float()
-            loss = compute_loss(predictions, targets, loss_fns)
+            loss = compute_loss(predictions, targets, loss_fns, loss_weights)
 
         optimizer.zero_grad()
         scaler.scale(loss).backward()

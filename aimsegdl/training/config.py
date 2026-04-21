@@ -30,3 +30,4 @@ class TrainingConfig:
     output_dir: str = "."           # all training outputs (weights, checkpoint, plots) are written here
     seed: int = None                # set for reproducible runs; None = non-deterministic
     use_lr_scheduler: bool = True   # ReduceLROnPlateau on val_loss (factor=0.5, patience=50)
+    loss_weights: tuple = (1.0, 1.0, 1.0)  # weights for (CE, MSE_fibre, MSE_axon) loss terms

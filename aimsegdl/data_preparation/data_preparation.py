@@ -109,6 +109,12 @@ def split_tiles(tiles, create_test_split=True):
 
     Returns:
         tuple: train_tiles, val_tiles, test_tiles
+
+    Note: splitting is tile-level, not image-level. Tiles from the same source
+    image can appear in different splits, which is a known limitation. Image-level
+    splitting is preferred in principle but impractical when the dataset contains
+    only a few large WSI images (e.g. 3 BF images), where image-level splitting
+    would leave only 1 image in val — too few for reliable metrics.
     """
     random.shuffle(tiles)
     n_total = len(tiles)
