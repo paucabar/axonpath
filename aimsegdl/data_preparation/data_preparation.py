@@ -99,13 +99,14 @@ def fix_label_edge_padding(fibre_lbl, axon_lbl, mask_sem):
     return new_fibre, new_axon, new_mask, fixed
 
 
-def split_tiles(tiles, create_test_split=True):
+def split_tiles(tiles, create_test_split=True, seed=None):
     """
     Split tiles into train, val, (optional) test sets.
 
     Args:
         tiles (list): List of tile data.
         create_test_split (bool): Whether to create a separate test split.
+        seed (int, optional): Random seed for reproducible splits.
 
     Returns:
         tuple: train_tiles, val_tiles, test_tiles
@@ -116,6 +117,8 @@ def split_tiles(tiles, create_test_split=True):
     only a few large WSI images (e.g. 3 BF images), where image-level splitting
     would leave only 1 image in val — too few for reliable metrics.
     """
+    if seed is not None:
+        random.seed(seed)
     random.shuffle(tiles)
     n_total = len(tiles)
 
@@ -145,7 +148,7 @@ def split_tiles(tiles, create_test_split=True):
 
 
 
-def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=True):
+def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=True, seed=None):
     os.makedirs(out_root, exist_ok=True)
 
     # Guard: abort if tiles exist without a manifest (pre-manifest prepared data)
@@ -264,7 +267,7 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
             print(f"  Tiled {base_name}: {valid_count} valid tiles (skipped {tile_count - valid_count})")
 
         print(f"Splitting {len(all_tiles)} tiles...")
-        train_tiles, val_tiles, test_tiles = split_tiles(all_tiles, create_test_split)
+        train_tiles, val_tiles, test_tiles = split_tiles(all_tiles, create_test_split, seed=seed)
 
         for split_name, tiles in zip(['train', 'val', 'test'], [train_tiles, val_tiles, test_tiles]):
             for tile_name, im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile, dataset, base_name in tiles:

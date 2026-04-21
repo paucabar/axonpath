@@ -10,12 +10,13 @@ _EXPECTED_TILE_SIZE = (512, 512)
 
 
 class AimSegDataset(Dataset):
-    def __init__(self, tile_dir, transform=None, cache=False):
+    def __init__(self, tile_dir, transform=None, cache=False, _skip_size_check=False):
         self.tile_paths = sorted(glob(os.path.join(tile_dir, "*.npy")))
         print(f"Discovered {len(self.tile_paths)} .npy tiles in '{tile_dir}'")
         self.transform = transform
         self.cache = cache
         self._data_cache = {} if cache else None
+        self._skip_size_check = _skip_size_check
 
     def populate_cache(self):
         """Preload all .npy tiles into memory to avoid loading during training."""
@@ -27,7 +28,7 @@ class AimSegDataset(Dataset):
                 try:
                     raw = np.load(path, allow_pickle=True).item()
                     h, w = raw["image"].shape[:2]
-                    if h < _EXPECTED_TILE_SIZE[0] or w < _EXPECTED_TILE_SIZE[1]:
+                    if not self._skip_size_check and (h < _EXPECTED_TILE_SIZE[0] or w < _EXPECTED_TILE_SIZE[1]):
                         raise ValueError(
                             f"Tile '{os.path.basename(path)}' has size {h}x{w}, "
                             f"which is smaller than the expected minimum "

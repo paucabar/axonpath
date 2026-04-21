@@ -166,11 +166,11 @@ def segment_instances_from_sdt(
     Returns:
         np.ndarray: Postprocessed label image.
     """
-    # Convert to NumPy
+    # Convert to NumPy (cast to float32 first — autocast may produce bfloat16)
     if distancemap.ndim == 3:
-        distancemap_np = distancemap[0].detach().cpu().numpy()
+        distancemap_np = distancemap[0].detach().cpu().float().numpy()
     elif distancemap.ndim == 2:
-        distancemap_np = distancemap.detach().cpu().numpy()
+        distancemap_np = distancemap.detach().cpu().float().numpy()
     else:
         raise ValueError(f"Unexpected distancemap shape: {distancemap.shape}")
 

@@ -114,22 +114,24 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
         image, masks = sample
 
         pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device, min_diameter=min_diameter)
-        pred_inner_tongue = label(pred_semantic == 2)
-        
+        pred_inner_tongue = label(pred_semantic == 2, connectivity=2)
+
         # Estimate inner tongue min area from min_diameter
         min_diameter_inner_tongue = min_diameter / 2
         radius = min_diameter_inner_tongue / 2
         min_area = int(np.pi * radius ** 2)
         pred_inner_tongue = fill_labels(pred_inner_tongue)
-        pred_inner_tongue = label(remove_small_objects(pred_inner_tongue > 0, min_size=max(1, min_area), connectivity=2))
+        pred_inner_tongue = label(
+            remove_small_objects(pred_inner_tongue > 0, min_size=max(1, min_area), connectivity=2),
+            connectivity=2,
+        )
         mapped_inner_tongue = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
-        #pred_fibre = remove_unmapped_labels(pred_fibre, mapped_inner_tongue)
 
         gt_fibre = masks[0].numpy()
         gt_axon = masks[1].numpy()
         gt_sem = masks[2].numpy()
 
-        gt_inner_tongue = label(gt_sem == 2)
+        gt_inner_tongue = label(gt_sem == 2, connectivity=2)
 
         fibre_eval = SegmentationEvaluator(gt_fibre, pred_fibre)
         axon_eval = SegmentationEvaluator(gt_axon, pred_axon)
