@@ -41,7 +41,8 @@ def evaluate(
             x = x.to(device)
             y = torch.tensor(np.stack(y, axis=1)).to(device)
 
-            prediction = model(x)
+            with torch.amp.autocast(device_type=device):
+                prediction = model(x)
 
             # Loss
             loss_ce = loss_fn[0](prediction[:, 0:3], y[:, 2].long())

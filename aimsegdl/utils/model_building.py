@@ -57,7 +57,7 @@ def get_loaders(
     train_dataset,
     val_dataset,
     batch_size,
-    num_workers=4,
+    num_workers=0,
     pin_memory=True,
 ):
     train_loader = DataLoader(

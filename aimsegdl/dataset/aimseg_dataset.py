@@ -6,6 +6,9 @@ from tqdm import tqdm
 from glob import glob
 from aimsegdl.utils.image_processing import normalize
 
+_EXPECTED_TILE_SIZE = (512, 512)
+
+
 class AimSegDataset(Dataset):
     def __init__(self, tile_dir, transform=None, cache=False):
         self.tile_paths = sorted(glob(os.path.join(tile_dir, "*.npy")))
@@ -22,7 +25,18 @@ class AimSegDataset(Dataset):
         for path in tqdm(self.tile_paths, desc="Populating cache"):
             if path not in self._data_cache:
                 try:
-                    data = np.load(path, allow_pickle=True).item()
+                    raw = np.load(path, allow_pickle=True).item()
+                    h, w = raw["image"].shape[:2]
+                    if h < _EXPECTED_TILE_SIZE[0] or w < _EXPECTED_TILE_SIZE[1]:
+                        raise ValueError(
+                            f"Tile '{os.path.basename(path)}' has size {h}x{w}, "
+                            f"which is smaller than the expected minimum "
+                            f"{_EXPECTED_TILE_SIZE[0]}x{_EXPECTED_TILE_SIZE[1]}. "
+                            "Re-prepare the dataset."
+                        )
+                    # Normalize once and store the result to avoid recomputing each epoch
+                    data = dict(raw)
+                    data["image"] = normalize(raw["image"]).astype(np.float32)
                     self._data_cache[path] = data
                 except Exception as e:
                     print(f"Error loading {path}: {e}")
@@ -36,15 +50,19 @@ class AimSegDataset(Dataset):
             data = self._data_cache[path]
         else:
             try:
-                data = np.load(path, allow_pickle=True).item()
+                raw = np.load(path, allow_pickle=True).item()
                 if self.cache:
+                    data = dict(raw)
+                    data["image"] = normalize(raw["image"]).astype(np.float32)
                     self._data_cache[path] = data
+                else:
+                    data = raw
             except Exception as e:
                 print(f"Error loading .npy file at {path}: {e}")
                 raise RuntimeError(f"Corrupt .npy: {path}") from e
 
         try:
-            image = normalize(data["image"]).astype(np.float32)
+            image = data["image"].astype(np.float32) if self.cache else normalize(data["image"]).astype(np.float32)
 
             mask_sem = np.where(data["mask_sem"] == 3, 2, data["mask_sem"])
 

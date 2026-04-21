@@ -60,7 +60,12 @@ def train(config: TrainingConfig):
 
     config_dict = asdict(config)
     config_dict["norm_type"] = norm_type
-    with open(os.path.join(config.output_dir, "training_config.json"), "w") as f:
+    if config.load_checkpoint:
+        # Avoid overwriting the original config; record resumed parameters separately
+        config_filename = f"training_config_resumed_epoch{config_dict.get('num_epochs', 0)}.json"
+    else:
+        config_filename = "training_config.json"
+    with open(os.path.join(config.output_dir, config_filename), "w") as f:
         json.dump(config_dict, f, indent=2)
 
     train_tf, val_tf = transforms_fn(config.image_height, config.image_width)

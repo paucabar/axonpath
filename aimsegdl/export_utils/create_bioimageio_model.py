@@ -240,14 +240,14 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
         description="AimSegDL TorchScript model for axon/fibre segmentation.",
         authors=[Author(name=name) for name in config_bioimageio.author_names],
         license=LicenseId(config_bioimageio.license_id),
-        documentation=RelativeFilePath(Path(config_bioimageio.output_dir).name + "/" + readme_filename),
+        documentation=RelativeFilePath(Path(os.path.relpath(os.path.join(config_bioimageio.output_dir, readme_filename)))),
         covers=[os.path.join(config_bioimageio.output_dir, "cover.png")],
         git_repo=HttpUrl("https://github.com/paucabar/aimseg-dl"),
         inputs=[input_descr],
         outputs=[output_descr],
         weights=WeightsDescr(
             torchscript=TorchscriptWeightsDescr(
-                source=RelativeFilePath(Path(config_bioimageio.output_dir).name + "/" +"weights.pt"),
+                source=RelativeFilePath(Path(os.path.relpath(os.path.join(config_bioimageio.output_dir, "weights.pt")))),
                 pytorch_version=torch.__version__,
             )
         ),
