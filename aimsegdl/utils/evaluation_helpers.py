@@ -9,8 +9,10 @@ from aimsegdl.utils.image_processing import (
     apply_semantic_segmentation_head,
     segment_instances_from_sdt,
     fill_labels,
+    map_axon_labels_to_fibres,
 )
 from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
+from aimsegdl.utils.losses import compute_loss
 
 
 def evaluate(
@@ -23,6 +25,7 @@ def evaluate(
     min_diameter: float = 30.0,
     show_results: bool = False,
     output_dir: str = ".",
+    loss_weights: tuple = (1.0, 1.0, 1.0),
 ):
     """
     Evaluate the model on the given loader with F1, Dice and loss metrics.
@@ -44,11 +47,7 @@ def evaluate(
             with torch.amp.autocast(device_type=device):
                 prediction = model(x)
 
-            # Loss
-            loss_ce = loss_fn[0](prediction[:, 0:3], y[:, 2].long())
-            loss_mse_fibre = loss_fn[1](prediction[:, 3], y[:, 3].float())
-            loss_mse_axon = loss_fn[1](prediction[:, 4], y[:, 4].float())
-            val_losses.append((loss_ce + loss_mse_fibre + loss_mse_axon).item())
+            val_losses.append(compute_loss(prediction, y, loss_fn, loss_weights).item())
 
             # Dice
             sem_pred = apply_semantic_segmentation_head(prediction[:, 0:3])
@@ -95,28 +94,35 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     pred_axon = segment_instances_from_sdt(pred[4].unsqueeze(0), axon_threshold, axon_min_diameter)
 
     pred_sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
-    pred_inner_tongue = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32))
-    pred_inner_tongue = np.squeeze(pred_inner_tongue)
 
-    # Estimate inner tongue min area from min_diameter
+    # Inner tongue postprocessing aligned with test eval and extension:
+    # fill holes → remove small objects → map to fibres
     min_diameter_inner_tongue = min_diameter / 2
     radius = min_diameter_inner_tongue / 2
     min_area = int(np.pi * radius ** 2)
-    pred_inner_tongue = label(remove_small_objects(pred_inner_tongue > 0, max_size=max(0, min_area - 1), connectivity=1))
+
+    pred_inner_tongue = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32), connectivity=2)
     pred_inner_tongue = fill_labels(pred_inner_tongue)
+    pred_inner_tongue = label(
+        remove_small_objects(pred_inner_tongue > 0, min_size=max(1, min_area), connectivity=2),
+        connectivity=2
+    )
+    pred_inner_tongue = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
 
     # Ground truth
     gt_fibre = target[0].cpu().numpy().astype(np.int32)
     gt_axon = target[1].cpu().numpy().astype(np.int32)
     gt_sem = target[2].cpu().numpy().astype(np.int32)
-    gt_inner_tongue = label((gt_sem == 2).astype(np.int32))
+    gt_inner_tongue = label((gt_sem == 2).astype(np.int32), connectivity=2)
 
-    f1_fibre = SegmentationEvaluator(gt_fibre, pred_fibre).f1_mean(
-        SegmentationEvaluator(gt_fibre, pred_fibre).evaluate_multiple_thresholds(f"sample_{index}_fibre"))
-    f1_axon = SegmentationEvaluator(gt_axon, pred_axon).f1_mean(
-        SegmentationEvaluator(gt_axon, pred_axon).evaluate_multiple_thresholds(f"sample_{index}_axon"))
-    f1_inner_tongue = SegmentationEvaluator(gt_inner_tongue, pred_inner_tongue).f1_mean(
-        SegmentationEvaluator(gt_inner_tongue, pred_inner_tongue).evaluate_multiple_thresholds(f"sample_{index}_inner_tongue"))
+    fibre_eval = SegmentationEvaluator(gt_fibre, pred_fibre)
+    f1_fibre = fibre_eval.f1_mean(fibre_eval.evaluate_multiple_thresholds(f"sample_{index}_fibre"))
+
+    axon_eval = SegmentationEvaluator(gt_axon, pred_axon)
+    f1_axon = axon_eval.f1_mean(axon_eval.evaluate_multiple_thresholds(f"sample_{index}_axon"))
+
+    inner_tongue_eval = SegmentationEvaluator(gt_inner_tongue, pred_inner_tongue)
+    f1_inner_tongue = inner_tongue_eval.f1_mean(inner_tongue_eval.evaluate_multiple_thresholds(f"sample_{index}_inner_tongue"))
 
     return f1_fibre, f1_axon, f1_inner_tongue
 
@@ -138,8 +144,8 @@ def plot_example(x, y, pred, fibre_threshold, axon_threshold, min_diameter, axon
         ],
         cmaps=[
             "gray", "glasbey", "glasbey",
-            "viridis", "sdt", "sdt",
-            "viridis", "glasbey", "glasbey"
+            "semantic", "sdt", "sdt",
+            "semantic", "glasbey", "glasbey"
         ],
         n_cols=3,
         output_dir=output_dir,

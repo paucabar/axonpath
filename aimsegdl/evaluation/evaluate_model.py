@@ -63,25 +63,25 @@ def compute_imagewise_means(results_df: pd.DataFrame) -> pd.DataFrame:
     Computes mean metrics per image, then averages over all images.
 
     Args:
-        results_df (pd.DataFrame): DataFrame with 'Image_Name', 'F1', 'Precision', 'Recall', 'Jaccard', etc.
+        results_df (pd.DataFrame): DataFrame with 'Image_Name', 'F1', 'Precision', 'Recall', etc.
 
     Returns:
         pd.Series: Series with overall mean of each metric.
     """
     per_image = results_df.groupby("Image_Name").mean(numeric_only=True)
-    overall_mean = per_image[["F1", "Precision", "Recall", "Jaccard"]].mean()
+    overall_mean = per_image[["F1", "Precision", "Recall"]].mean()
     return overall_mean
 
 def plot_summary_bar(overall_metrics: pd.Series, title_tag: str):
     """
-    Plots a bar chart of the average F1, Precision, Recall, and Jaccard.
+    Plots a bar chart of the average F1, Precision, and Recall.
 
     Args:
         overall_metrics (pd.Series): Series with metric names as index and their average values.
         title_tag (str): Target identifier, e.g., fibre, axon... (for title only)
     """
     fig, ax = plt.subplots(figsize=(6, 4))
-    bars = ax.bar(overall_metrics.index, overall_metrics.values, color=["steelblue", "seagreen", "goldenrod", "mediumpurple"])
+    bars = ax.bar(overall_metrics.index, overall_metrics.values, color=["steelblue", "seagreen", "goldenrod"])
     
     ax.set_ylim(0, 1)
     ax.set_ylabel("Score")
@@ -103,7 +103,7 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
         )
 
     # Init result DataFrames with proper columns
-    columns = ["Image_Name", "Threshold", "F1", "Precision", "Recall", "Jaccard", "TP", "FP", "FN"]
+    columns = ["Image_Name", "Threshold", "F1", "Precision", "Recall", "TP", "FP", "FN"]
     fibre_results = pd.DataFrame(columns=columns)
     axon_results = pd.DataFrame(columns=columns)
     inner_tongue_results = pd.DataFrame(columns=columns)
@@ -121,7 +121,7 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
         radius = min_diameter_inner_tongue / 2
         min_area = int(np.pi * radius ** 2)
         pred_inner_tongue = fill_labels(pred_inner_tongue)
-        pred_inner_tongue = label(remove_small_objects(pred_inner_tongue > 0, max_size=max(0, min_area - 1), connectivity=1))
+        pred_inner_tongue = label(remove_small_objects(pred_inner_tongue > 0, min_size=max(1, min_area), connectivity=2))
         mapped_inner_tongue = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
         #pred_fibre = remove_unmapped_labels(pred_fibre, mapped_inner_tongue)
 

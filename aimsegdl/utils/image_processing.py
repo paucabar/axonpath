@@ -190,63 +190,78 @@ def segment_instances_from_sdt(
     if seed_mask is None or not isinstance(seed_mask, np.ndarray):
         seed_mask = np.logical_and(distancemap_clipped >= threshold, valid_mask)
     
-    seeds = label(seed_mask)
-    seeds_mask = remove_small_objects(seeds > 0, max_size=max(0, min_area - 1), connectivity=1)
-    seeds = label(seeds_mask)
+    # connectivity=2 (8-connected) matches the extension's implicit watershed behaviour
+    # and avoids splitting diagonal seed blobs into multiple instances
+    seeds = label(seed_mask, connectivity=2)
+    seeds_mask = remove_small_objects(seeds > 0, min_size=max(1, min_area), connectivity=2)
+    seeds = label(seeds_mask, connectivity=2)
 
     # Watershed
-    labels = watershed(-distancemap_clipped, markers=seeds, mask=valid_mask, connectivity=1, compactness=compactness)
+    labels = watershed(-distancemap_clipped, markers=seeds, mask=valid_mask, connectivity=2, compactness=compactness)
 
     # Fill holes in final labels
     return fill_labels(labels)
 
 
 def map_axon_labels_to_fibres(
-    label_img1: np.ndarray, 
-    label_img2: np.ndarray, 
-    min_overlap_frac: float = 0.5
+    label_img1: np.ndarray,
+    label_img2: np.ndarray,
+    min_overlap_frac: float = 0.9
 ) -> np.ndarray:
     """
-    Merge label_img2 fragments by assigning each to the label_img1 object it overlaps with most,
-    provided that the overlap covers at least `min_overlap_frac` of the label_img2 object.
+    Assign each label_img2 fragment to the label_img1 object it overlaps most with,
+    provided that overlap covers at least `min_overlap_frac` of the fragment (IoC metric).
+
+    Matches the extension's hierarchy assignment: threshold = 0.9 (90% of inner cylinder
+    must fall within the matched fibre). Accepted fragments are clipped to the fibre
+    boundary — pixels outside the matched fibre are zeroed. Unmatched fragments are
+    set to 0.
 
     Parameters:
         label_img1 (np.ndarray): Reference label image (e.g., fibres).
-        label_img2 (np.ndarray): Fragmented label image (e.g., axons).
-        min_overlap_frac (float): Minimum fraction of label_img2 area that must overlap 
-                                  with a label in label_img1 to accept the mapping.
-                                  Default = 0.5.
+        label_img2 (np.ndarray): Fragment label image to map (e.g., inner tongue).
+        min_overlap_frac (float): Minimum IoC for a mapping to be accepted. Default = 0.9.
 
     Returns:
-        np.ndarray: New label image where label_img2 fragments are grouped by their best 
-                    label_img1 match, or set to 0 if overlap is insufficient.
+        np.ndarray: Label image where each accepted fragment is assigned its fibre label
+                    and clipped to the fibre boundary.
     """
     label_img1 = label_img1.astype(np.int32)
     label_img2 = label_img2.astype(np.int32)
 
+    max_label1 = int(label_img1.max())
+    max_label2 = int(label_img2.max())
+
+    if max_label1 == 0 or max_label2 == 0:
+        return np.zeros_like(label_img2, dtype=np.int32)
+
     flat1 = label_img1.ravel()
     flat2 = label_img2.ravel()
 
-    max_label1 = label_img1.max()
-    max_label2 = label_img2.max()
-
-    overlap_matrix, _, _ = np.histogram2d(flat1, flat2, bins=(max_label1 + 1, max_label2 + 1))
+    # Integer-centred bin edges ensure each label falls in exactly its own bin
+    bins1 = np.arange(-0.5, max_label1 + 1.5)
+    bins2 = np.arange(-0.5, max_label2 + 1.5)
+    overlap_matrix, _, _ = np.histogram2d(flat1, flat2, bins=[bins1, bins2])
+    # overlap_matrix[i, j] = pixel count where label_img1==i and label_img2==j
 
     merged = np.zeros_like(label_img2, dtype=np.int32)
 
     for l2 in range(1, max_label2 + 1):
-        overlaps = overlap_matrix[1:, l2]
+        overlaps = overlap_matrix[1:, l2]  # overlap with each fibre (labels 1..max_label1)
         if overlaps.sum() == 0:
             continue
 
-        best_l1 = np.argmax(overlaps) + 1
-        overlap = overlaps[best_l1 - 1]
+        best_l1_idx = int(np.argmax(overlaps))
+        best_l1 = best_l1_idx + 1
+        overlap = overlaps[best_l1_idx]
 
-        l2_area = np.sum(label_img2 == l2)
-        frac = overlap / l2_area
+        l2_area = overlap_matrix[:, l2].sum()  # total pixels of this fragment
+        if l2_area == 0:
+            continue
 
-        if frac >= min_overlap_frac:
-            merged[label_img2 == l2] = best_l1
+        if overlap / l2_area >= min_overlap_frac:
+            # Clip to fibre boundary: only assign pixels inside the matched fibre
+            merged[(label_img2 == l2) & (label_img1 == best_l1)] = best_l1
 
     return merged
 

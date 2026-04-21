@@ -112,13 +112,13 @@ def train(config: TrainingConfig):
         if config.load_checkpoint:
             print(f"Total epoch {last_epoch + epoch + 1}/{last_epoch + config.num_epochs}")
 
-        t_loss = train_loop(train_loader, model, optimizer, loss_fns, scaler, device)
+        t_loss = train_loop(train_loader, model, optimizer, loss_fns, scaler, device, config.loss_weights)
         train_loss.append(t_loss)
 
         show_results_epochs = [int(config.num_epochs * f) - 1 for f in [0.25, 0.5, 0.75, 1.0]]
         show_results_epochs = sorted(set(min(max(e, 0), config.num_epochs - 1) for e in show_results_epochs))
         show_results = epoch in show_results_epochs
-        v_loss, f1_fib, f1_ax, f1_in, _ = evaluate(val_loader, model, loss_fns, device, config.fibre_threshold, config.axon_threshold, config.min_diameter, show_results, output_dir=config.output_dir)
+        v_loss, f1_fib, f1_ax, f1_in, _ = evaluate(val_loader, model, loss_fns, device, config.fibre_threshold, config.axon_threshold, config.min_diameter, show_results, output_dir=config.output_dir, loss_weights=config.loss_weights)
         val_loss.append(v_loss)
         f1_fibre.append(f1_fib)
         f1_axon.append(f1_ax)
