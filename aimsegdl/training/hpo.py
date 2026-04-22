@@ -80,12 +80,9 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
         _dataset_kwargs = {}
 
     def objective(trial):
-        trial_output_dir = os.path.join(output_dir, f"trial_{trial.number:03d}")
-        os.makedirs(trial_output_dir, exist_ok=True)
-
         config, norm_type = _build_config(
             trial, train_dir, val_dir, proxy_epochs, min_diameter,
-            device, trial_output_dir
+            device, output_dir
         )
 
         # Store config so _write_outputs can read it later
@@ -136,7 +133,8 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
                 loss_weights=config.loss_weights,
             )
 
-            trial.report(val_loss_final, epoch)
+            mean_f1 = (f1_fibre + f1_axon + f1_inner_tongue) / 3.0
+            trial.report(mean_f1, epoch)
             if trial.should_prune():
                 trial.set_user_attr("epochs_run", epoch + 1)
                 raise optuna.TrialPruned()

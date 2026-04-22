@@ -251,7 +251,7 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
             for i, (im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile) in enumerate(
                 zip(img_tiles, mask_tiles, label_tiles, axon_tiles, sdt_fibre_tiles, sdt_axon_tiles)
             ):
-                if not np.any(clear_border(lbl_tile, connectivity=2) > 0):
+                if not np.any(clear_border(lbl_tile) > 0):
                     continue
 
                 tile_name = f"{dataset}_{base_name}_tile{valid_count}"
