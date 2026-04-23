@@ -32,6 +32,12 @@ def main():
         help="List of author names"
     )
     parser.add_argument(
+        "--tile_size",
+        type=int,
+        default=512,
+        help="Minimum input tile size enforced by the Pipeline wrapper (default: 512)"
+    )
+    parser.add_argument(
         "--predict_inner_tongue",
         action="store_true",
         default=False,
@@ -54,6 +60,7 @@ def main():
         output_dir=args.output_dir,
         model_pixel_size=args.pixel_size,
         min_diameter=args.min_diameter,
+        tile_size=args.tile_size,
         predict_inner_tongue=args.predict_inner_tongue,
         citation_text=args.citation_text,
         citation_doi=args.citation_doi,

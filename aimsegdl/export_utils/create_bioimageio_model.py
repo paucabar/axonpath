@@ -157,7 +157,7 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
     # Load model and wrap in pipeline
     model = load_model(config_bioimageio.model_path, device="cpu")
     model.eval()
-    wrapped_model = Pipeline(model)
+    wrapped_model = Pipeline(model, target_height=config_bioimageio.tile_size, target_width=config_bioimageio.tile_size)
 
     # Prepare test input
     img = np.array(Image.open(config_bioimageio.test_img_path)).astype(np.float32)

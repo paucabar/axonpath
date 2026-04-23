@@ -14,11 +14,11 @@ class Pipeline(nn.Module):
     and output reassembly.
     """
 
-    def __init__(self, model: nn.Module):
+    def __init__(self, model: nn.Module, target_height: int = 512, target_width: int = 512):
         super().__init__()
         self.model = model
-        self.target_height = 512
-        self.target_width = 512
+        self.target_height = target_height
+        self.target_width = target_width
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

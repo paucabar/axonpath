@@ -103,7 +103,50 @@ def test_pipeline_preserves_spatial_dims():
 
 
 # ---------------------------------------------------------------------------
-# 5. Instance segmentation from SDT
+# 5. Pipeline: custom tile size
+# ---------------------------------------------------------------------------
+
+def test_pipeline_custom_tile_size():
+    """Pipeline must respect custom target_height / target_width and store them."""
+    from aimsegdl.pipeline import Pipeline
+    from aimsegdl.utils.model_building import model_fn
+
+    model = model_fn("cpu", norm_type="batch")
+    pipeline = Pipeline(model, target_height=256, target_width=256)
+
+    assert pipeline.target_height == 256
+    assert pipeline.target_width == 256
+
+    # Input smaller than target — output must still match input spatial dims
+    H, W = 64, 64
+    x = torch.randn(1, 1, H, W)
+    with torch.no_grad():
+        out = pipeline(x)
+
+    assert out.shape[2] == H and out.shape[3] == W, (
+        f"Spatial dims must be {H}×{W}, got {out.shape[2]}×{out.shape[3]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 6. TrainingConfig: early stopping fields
+# ---------------------------------------------------------------------------
+
+def test_training_config_early_stopping_fields():
+    """TrainingConfig must expose early_stopping_patience and early_stopping_min_delta."""
+    from aimsegdl.training.config import TrainingConfig
+
+    cfg_default = TrainingConfig()
+    assert cfg_default.early_stopping_patience == 0, "default patience must be 0 (disabled)"
+    assert cfg_default.early_stopping_min_delta == pytest.approx(0.001)
+
+    cfg_custom = TrainingConfig(early_stopping_patience=200, early_stopping_min_delta=0.005)
+    assert cfg_custom.early_stopping_patience == 200
+    assert cfg_custom.early_stopping_min_delta == pytest.approx(0.005)
+
+
+# ---------------------------------------------------------------------------
+# 7. Instance segmentation from SDT
 # ---------------------------------------------------------------------------
 
 def test_instance_segmentation_returns_integer_labels():
