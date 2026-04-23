@@ -3,7 +3,6 @@ import numpy as np
 import torch
 from PIL import Image
 from pathlib import Path
-import matplotlib.cm as cm
 from scipy.ndimage import binary_fill_holes
 
 from aimsegdl.inference.inference import load_model
@@ -112,13 +111,13 @@ def generate_and_save_custom_cover(
 
     # Extract images
     gray = input_image[0, 0]
-    semantic_logits = output_tensor[0, 0]
+    semantic = output_tensor[0, 0]
     fibre = segment_instances_from_sdt(output_tensor[0, 1], min_diameter=min_diameter)
     axon = segment_instances_from_sdt(output_tensor[0, 2], min_diameter=min_diameter)
     axon_mapped = map_axon_labels_to_fibres(fibre, axon)
 
     # Ensure semantic is class index (0, 1, 2)
-    semantic_classes = semantic_logits.cpu().numpy()
+    semantic_classes = semantic.cpu().numpy()
 
     # Fill holes in semantic label 2
     label_2_mask = (semantic_classes == 2)
@@ -126,9 +125,10 @@ def generate_and_save_custom_cover(
     semantic_classes[(semantic_classes != 2) & filled_label_2] = 2
 
     # Get colormapped RGB versions (values expected in [0, N] range)
+    import matplotlib
     glasbey = get_glasbey_cmap()
-    gray_rgb = cm.get_cmap("gray")(gray)[..., :3]
-    semantic_rgb = cm.get_cmap("viridis")(semantic_classes / 2.0)[..., :3]
+    gray_rgb = matplotlib.colormaps["gray"](gray)[..., :3]
+    semantic_rgb = matplotlib.colormaps["viridis"](semantic_classes / 2.0)[..., :3]
     fibre_rgb = glasbey(fibre / (fibre.max() or 1))[..., :3]
     axon_rgb = glasbey(axon_mapped / (axon_mapped.max() or 1))[..., :3]
 

@@ -13,8 +13,8 @@ def get_glasbey_cmap():
 
 def get_semantic_cmap():
     """Viridis colormap with black forced at index 0 for background (class 0)."""
-    import matplotlib.cm as cm
-    viridis = cm.get_cmap("viridis", 256)
+    import matplotlib
+    viridis = matplotlib.colormaps["viridis"].resampled(256)
     colors = viridis(np.linspace(0, 1, 256))
     colors[0] = [0, 0, 0, 1]
     return LinearSegmentedColormap.from_list("semantic", colors, N=256)
@@ -27,9 +27,9 @@ def get_sdt_cmap(base="plasma", background="black"):
         base: any matplotlib colormap name ("inferno", "viridis", "turbo", "plasma", ...).
         background: "black" or "white".
     """
-    import matplotlib.cm as cm
+    import matplotlib
     bg_color = [0, 0, 0, 1] if background == "black" else [1, 1, 1, 1]
-    base_cmap = cm.get_cmap(base, 256)
+    base_cmap = matplotlib.colormaps[base].resampled(256)
     colors = base_cmap(np.linspace(0, 1, 256))
     colors[0] = bg_color
     return LinearSegmentedColormap.from_list(f"sdt_{base}_{background}", colors, N=256)
@@ -202,38 +202,6 @@ def plot_iou_distributions(df, label, output_dir="."):
 
     # Styling
     ax.set_title(f"{label} F1 Across IoU Thresholds")
-    ax.set_xlabel("IoU Threshold")
-    ax.set_ylabel("F1 Score")
-    ax.set_ylim(0, 1.05)
-    ax.legend()
-    ax.grid(True)
-
-    fig.tight_layout()
-    fig.savefig(os.path.join(output_dir, f"{label.lower()}_iou_distribution.pdf"), dpi=300, bbox_inches="tight")
-    plt.close(fig)
-
-
-def plot_iou_distributions_imagewise(df, label, output_dir="."):
-    """
-    Plot IoU/F1 distributions for each image using matplotlib (no seaborn).
-
-    Args:
-        df (pd.DataFrame): DataFrame with columns ['Image_Name', 'Threshold', 'F1'].
-        label (str): Type of label (e.g., "Fibre" or "Axon").
-        output_dir (str): Directory to save the plot PDF.
-    """
-    fig, ax = plt.subplots(figsize=(10, 5))
-
-    # Group by image name and plot each line
-    grouped = df.groupby("Image_Name")
-    for name, group in grouped:
-        ax.plot(group["Threshold"], group["F1"], alpha=0.4, linewidth=1)
-
-    # Plot mean F1 line across images at each threshold
-    mean_f1 = df.groupby("Threshold")["F1"].mean().astype(float)
-    ax.plot(mean_f1.index, mean_f1.values, label="Mean F1", color="black", linewidth=2)
-
-    ax.set_title(f"{label} F1 Scores Across IoU Thresholds")
     ax.set_xlabel("IoU Threshold")
     ax.set_ylabel("F1 Score")
     ax.set_ylim(0, 1.05)
