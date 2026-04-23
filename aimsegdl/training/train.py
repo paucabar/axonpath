@@ -1,3 +1,4 @@
+import csv
 import json
 import random
 import torch
@@ -89,6 +90,11 @@ def train(config: TrainingConfig):
     f1_fibre, f1_axon, f1_inner_tongue = [], [], []
     balanced_seg_score, best_score = [], 0
     last_epoch = 0
+    _es_best = 0.0
+    _es_counter = 0
+
+    csv_path = os.path.join(config.output_dir, "training_log.csv")
+    _csv_header_written = os.path.exists(csv_path) and config.load_checkpoint
 
     checkpoint_path = os.path.join(config.output_dir, "model_checkpoint.pth.tar")
     best_weights_path = os.path.join(config.output_dir, "best_weights_model.pth")
@@ -135,6 +141,27 @@ def train(config: TrainingConfig):
         if score > best_score:
             best_score = score
             torch.save({"state_dict": model.state_dict(), "norm_type": norm_type}, best_weights_path)
+
+        # CSV logging
+        with open(csv_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            if not _csv_header_written:
+                writer.writerow(["epoch", "train_loss", "val_loss", "f1_fibre", "f1_axon", "f1_inner_tongue", "balanced_seg_score"])
+                _csv_header_written = True
+            writer.writerow([epoch + 1 + last_epoch, t_loss, v_loss, f1_fib, f1_ax, f1_in, score])
+
+        # Early stopping
+        if config.early_stopping_patience > 0:
+            if score >= _es_best + config.early_stopping_min_delta:
+                _es_best = score
+                _es_counter = 0
+            else:
+                _es_counter += 1
+            if _es_counter >= config.early_stopping_patience:
+                print(f"Early stopping at epoch {epoch + 1 + last_epoch}: "
+                      f"no improvement > {config.early_stopping_min_delta} for "
+                      f"{config.early_stopping_patience} consecutive epochs.")
+                break
 
         save_checkpoint({
             "state_dict": model.state_dict(),
