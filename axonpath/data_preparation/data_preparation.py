@@ -148,6 +148,39 @@ def split_tiles(tiles, create_test_split=True, seed=None):
 
 
 
+def _annotation_qc(filled_label, mask_sem):
+    """
+    Check for annotation inconsistencies in a single image.
+
+    Returns a list of (issue_type, count, detail) tuples. Empty list means clean.
+
+    Checks performed:
+    - orphaned_inner_cylinder: mask_sem==2 pixels not inside any fibre label
+    - orphaned_axon: mask_sem==3 pixels not inside any fibre label
+    - fibre_without_axon: fibre instances with no axon pixels anywhere inside them
+    """
+    issues = []
+
+    orphaned_ic = (mask_sem == 2) & (filled_label == 0)
+    if orphaned_ic.any():
+        n = int(orphaned_ic.sum())
+        issues.append(("orphaned_inner_cylinder", n, f"{n} px outside fibre"))
+
+    orphaned_axon = (mask_sem == 3) & (filled_label == 0)
+    if orphaned_axon.any():
+        n = int(orphaned_axon.sum())
+        issues.append(("orphaned_axon", n, f"{n} px outside fibre"))
+
+    fibre_ids = np.unique(filled_label)
+    fibre_ids = fibre_ids[fibre_ids != 0]
+    no_axon = [int(fid) for fid in fibre_ids if not np.any((filled_label == fid) & (mask_sem == 3))]
+    if no_axon:
+        ids_str = str(no_axon[:10]) + ("..." if len(no_axon) > 10 else "")
+        issues.append(("fibre_without_axon", len(no_axon), f"fibre IDs: {ids_str}"))
+
+    return issues
+
+
 def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=True, seed=None):
     os.makedirs(out_root, exist_ok=True)
 
@@ -165,6 +198,7 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
     manifest = _load_manifest(out_root)
     summary_records = []
     tile_records = []
+    qc_records = []
 
     for dataset in os.listdir(in_root):
         dataset_path = os.path.join(in_root, dataset)
@@ -200,6 +234,7 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
                 )
                 img = img.mean(axis=2).astype(np.float32)
 
+            base_name = os.path.splitext(os.path.basename(img_path))[0]
             mask = io.imread(msk_path).astype(np.uint8)
             axon_mask = (mask == 3).astype(np.uint8)
             label_raw = io.imread(lbl_path).astype(np.uint16)
@@ -215,6 +250,12 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
 
             # Fill axon labels
             axon_instance = fill_labels(label(axon_mask.astype(np.int32)))
+
+            # Annotation QC
+            qc_issues = _annotation_qc(filled_label, mask)
+            for issue_type, count, detail in qc_issues:
+                print(f"  QC WARNING [{base_name}] {issue_type}: {detail}")
+                qc_records.append([dataset, base_name, issue_type, count, detail])
 
             # Compute SDTs
             sdt_fibre, _, _ = LabelDistanceTransforms(filled_label, 0.3, False, False, True).skeleton_aware_dist_trans()
@@ -243,7 +284,6 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
             sdt_axon_tiles = tile_image(sdt_axon_padded, tile_h, tile_w)
             axon_tiles = tile_image(axon_instance_padded, tile_h, tile_w)
 
-            base_name = os.path.splitext(os.path.basename(img_path))[0]
             tile_count = len(img_tiles)
             tile_counts[base_name] = {'count': tile_count, 'num_fibers': num_fibers, 'h': h, 'w': w}
 
@@ -270,7 +310,7 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
         train_tiles, val_tiles, test_tiles = split_tiles(all_tiles, create_test_split, seed=seed)
 
         for split_name, tiles in zip(['train', 'val', 'test'], [train_tiles, val_tiles, test_tiles]):
-            for tile_name, im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile, dataset, base_name in tiles:
+            for tile_name, im_tile, msk_tile, lbl_tile, axon_tile, sdt_fibre_tile, sdt_axon_tile, _tile_dataset, _tile_base_name in tiles:
                 out_tile_path = os.path.join(out_root, f"{split_name}_tiles")
                 os.makedirs(out_tile_path, exist_ok=True)
 
@@ -284,8 +324,8 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
                 }
                 np.save(os.path.join(out_tile_path, f"{tile_name}.npy"), tile_data)
 
-                tile_records.append([split_name, tile_name, dataset, im_tile.shape[0], im_tile.shape[1]])
-                tile_counts[base_name][f'{split_name}_count'] = tile_counts[base_name].get(f'{split_name}_count', 0) + 1
+                tile_records.append([split_name, tile_name, _tile_dataset, im_tile.shape[0], im_tile.shape[1]])
+                tile_counts[_tile_base_name][f'{split_name}_count'] = tile_counts[_tile_base_name].get(f'{split_name}_count', 0) + 1
 
         for base_name, stats in tile_counts.items():
             summary_records.append([
@@ -332,4 +372,15 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
         writer.writerow(['Split', 'ImageName', 'Dataset', 'Height', 'Width'])
         writer.writerows(tile_records)
 
-    print(f"\n Done! Saved:\n  - Summary: {summary_path}\n  - Tile list: {tile_list_path}\n  - Total tiles: {len(tile_records)} from {len(summary_records)} images.\n")
+    qc_path = os.path.join(out_root, "annotation_qc.tsv")
+    with open(qc_path, mode='w', newline='') as f:
+        writer = csv.writer(f, delimiter='\t')
+        writer.writerow(['Dataset', 'ImageName', 'IssueType', 'Count', 'Detail'])
+        writer.writerows(qc_records)
+
+    if qc_records:
+        print(f"  QC: {len(qc_records)} issue(s) found — see {qc_path}")
+    else:
+        print("  QC: no annotation issues found.")
+
+    print(f"\n Done! Saved:\n  - Summary: {summary_path}\n  - Tile list: {tile_list_path}\n  - QC report: {qc_path}\n  - Total tiles: {len(tile_records)} from {len(summary_records)} images.\n")
