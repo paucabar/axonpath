@@ -193,7 +193,7 @@ def segment_instances_from_sdt(
     # connectivity=2 (8-connected) matches the extension's implicit watershed behaviour
     # and avoids splitting diagonal seed blobs into multiple instances
     seeds = label(seed_mask, connectivity=2)
-    seeds_mask = remove_small_objects(seeds > 0, min_size=max(1, min_area), connectivity=2)
+    seeds_mask = remove_small_objects(seeds > 0, max_size=max(0, min_area - 1), connectivity=2)
     seeds = label(seeds_mask, connectivity=2)
 
     # Watershed
