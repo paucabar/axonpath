@@ -43,9 +43,12 @@ from axonpath.dataset.axonpath_dataset import AxonPathDataset
 # ---------------------------------------------------------------------------
 
 def _build_config(trial, train_dir, val_dir, proxy_epochs, min_diameter,
-                  device, trial_output_dir):
+                  device, trial_output_dir, fixed_batch_size=None):
     lr = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
-    batch_size = trial.suggest_categorical("batch_size", [2, 4, 8])
+    if fixed_batch_size is not None:
+        batch_size = fixed_batch_size
+    else:
+        batch_size = trial.suggest_categorical("batch_size", [2, 4, 8])
     mse_fibre_w = trial.suggest_float("loss_weight_mse_fibre", 0.5, 3.0)
     mse_axon_w = trial.suggest_float("loss_weight_mse_axon", 0.5, 3.0)
 
@@ -69,7 +72,7 @@ def _build_config(trial, train_dir, val_dir, proxy_epochs, min_diameter,
 
 def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
                    output_dir, image_height=512, image_width=512,
-                   _dataset_kwargs=None):
+                   fixed_batch_size=None, _dataset_kwargs=None):
     """
     Return a closure that Optuna calls for each trial.
 
@@ -82,7 +85,7 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
     def objective(trial):
         config, norm_type = _build_config(
             trial, train_dir, val_dir, proxy_epochs, min_diameter,
-            device, output_dir
+            device, output_dir, fixed_batch_size=fixed_batch_size
         )
 
         # Store config so _write_outputs can read it later
@@ -200,18 +203,19 @@ def _write_summary(study, output_dir):
 
 
 def _write_best_config(study, output_dir, proxy_epochs, min_diameter, device,
-                       image_height, image_width):
+                       image_height, image_width, fixed_batch_size=None):
     completed = [t for t in study.trials
                  if t.state == optuna.trial.TrialState.COMPLETE]
     if not completed:
         return
 
     best = max(completed, key=lambda t: t.value)
-    norm_type = "instance" if best.params["batch_size"] < 8 else "batch"
+    batch_size = best.params.get("batch_size", fixed_batch_size)
+    norm_type = "instance" if batch_size < 8 else "batch"
 
     config = TrainingConfig(
         learning_rate=best.params["learning_rate"],
-        batch_size=best.params["batch_size"],
+        batch_size=batch_size,
         loss_weights=(1.0, best.params["loss_weight_mse_fibre"],
                       best.params["loss_weight_mse_axon"]),
         min_diameter=min_diameter,
@@ -283,12 +287,12 @@ def _write_plots(study, output_dir):
 
 
 def write_outputs(study, output_dir, proxy_epochs, min_diameter, device,
-                  image_height=512, image_width=512):
+                  image_height=512, image_width=512, fixed_batch_size=None):
     """Write all result files. Safe to call after every trial."""
     os.makedirs(output_dir, exist_ok=True)
     _write_summary(study, output_dir)
     _write_best_config(study, output_dir, proxy_epochs, min_diameter, device,
-                       image_height, image_width)
+                       image_height, image_width, fixed_batch_size=fixed_batch_size)
     _write_importance(study, output_dir)
     _write_plots(study, output_dir)
 
@@ -309,6 +313,7 @@ def run_study(
     seed=None,
     image_height=512,
     image_width=512,
+    fixed_batch_size=None,
     _dataset_kwargs=None,
 ):
     """
@@ -364,26 +369,27 @@ def run_study(
 
     objective = make_objective(
         train_dir, val_dir, proxy_epochs, min_diameter, device,
-        output_dir, image_height, image_width, _dataset_kwargs,
+        output_dir, image_height, image_width, fixed_batch_size, _dataset_kwargs,
     )
 
     def _callback(study, trial):
         write_outputs(study, output_dir, proxy_epochs, min_diameter, device,
-                      image_height, image_width)
+                      image_height, image_width, fixed_batch_size=fixed_batch_size)
 
     study.optimize(objective, n_trials=n_trials, callbacks=[_callback])
 
     # Final write (covers the last trial if callback already ran, idempotent)
     write_outputs(study, output_dir, proxy_epochs, min_diameter, device,
-                  image_height, image_width)
+                  image_height, image_width, fixed_batch_size=fixed_batch_size)
 
     completed = [t for t in study.trials
                  if t.state == optuna.trial.TrialState.COMPLETE]
     if completed:
         best = study.best_trial
+        batch_size_str = str(best.params.get("batch_size", fixed_batch_size))
         print(f"\nBest trial #{best.number}: mean F1 = {best.value:.4f}")
         print(f"  learning_rate          = {best.params['learning_rate']:.2e}")
-        print(f"  batch_size             = {best.params['batch_size']}")
+        print(f"  batch_size             = {batch_size_str}")
         print(f"  loss_weight_mse_fibre  = {best.params['loss_weight_mse_fibre']:.3f}")
         print(f"  loss_weight_mse_axon   = {best.params['loss_weight_mse_axon']:.3f}")
     else:

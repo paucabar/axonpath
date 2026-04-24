@@ -75,6 +75,10 @@ def main():
                         help="Resume from an existing study.db in --output_dir")
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for the Optuna sampler (reproducible trial order)")
+    parser.add_argument("--fixed_batch_size", type=int, default=None,
+                        help="Fix batch size to this value instead of searching it. "
+                             "Useful when training data size constrains the choice "
+                             "(e.g. --fixed_batch_size 8 for a combined dataset).")
 
     # Hardware
     parser.add_argument("--device", default=None,
@@ -94,6 +98,7 @@ def main():
         device=device,
         resume=args.resume,
         seed=args.seed,
+        fixed_batch_size=args.fixed_batch_size,
     )
 
 
