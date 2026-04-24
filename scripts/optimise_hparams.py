@@ -1,5 +1,5 @@
-"""
-Hyperparameter optimisation for aimsegdl models.
+﻿"""
+Hyperparameter optimisation for axonpath models.
 
 Requires: pip install optuna  (development tool — not in environment.yml)
 
@@ -42,12 +42,12 @@ study.db                 — SQLite study file (resumable with --resume)
 
 import argparse
 import torch
-from aimsegdl.training.hpo import run_study
+from axonpath.training.hpo import run_study
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Hyperparameter optimisation for aimsegdl",
+        description="Hyperparameter optimisation for axonpath",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -75,6 +75,10 @@ def main():
                         help="Resume from an existing study.db in --output_dir")
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for the Optuna sampler (reproducible trial order)")
+    parser.add_argument("--fixed_batch_size", type=int, default=None,
+                        help="Fix batch size to this value instead of searching it. "
+                             "Useful when training data size constrains the choice "
+                             "(e.g. --fixed_batch_size 8 for a combined dataset).")
 
     # Hardware
     parser.add_argument("--device", default=None,
@@ -94,6 +98,7 @@ def main():
         device=device,
         resume=args.resume,
         seed=args.seed,
+        fixed_batch_size=args.fixed_batch_size,
     )
 
 

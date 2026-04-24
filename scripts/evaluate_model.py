@@ -1,13 +1,13 @@
-import argparse
+﻿import argparse
 import torch
-from aimsegdl.evaluation.evaluate_model import (
+from axonpath.evaluation.evaluate_model import (
     evaluate_model_on_testset,
     compute_imagewise_means,
     plot_summary_bar
 )
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate AimSegDL model on test set")
+    parser = argparse.ArgumentParser(description="Evaluate axonpath model on test set")
 
     parser.add_argument("--test_dir", type=str, required=True, help="Path to test tiles directory")
     parser.add_argument("--model_path", type=str, required=True, help="Path to trained model (.pth file)")
@@ -20,7 +20,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Evaluate the model
-    fibre_results, axon_results, inner_tongue_results = evaluate_model_on_testset(
+    fibre_results, axon_results, inner_cylinder_results = evaluate_model_on_testset(
         model_path=args.model_path,
         test_dir=args.test_dir,
         device=device,
@@ -38,8 +38,8 @@ def main():
         mean_metrics_axon = compute_imagewise_means(axon_results)
         plot_summary_bar(mean_metrics_axon, "Axon")
 
-        mean_metrics_inner_tongue = compute_imagewise_means(inner_tongue_results)
-        plot_summary_bar(mean_metrics_inner_tongue, "Inner Tongue")
+        mean_metrics_inner_cylinder = compute_imagewise_means(inner_cylinder_results)
+        plot_summary_bar(mean_metrics_inner_cylinder, "Inner Cylinder")
 
 if __name__ == "__main__":
     main()

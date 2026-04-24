@@ -1,7 +1,7 @@
-import argparse
+﻿import argparse
 import os
 import shutil
-from aimsegdl.data_preparation.data_preparation import split_dataset
+from axonpath.data_preparation.data_preparation import split_dataset
 
 
 def main():

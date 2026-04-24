@@ -1,10 +1,10 @@
-import argparse
+﻿import argparse
 import torch
-from aimsegdl.training.config import TrainingConfig
-from aimsegdl.training.train import train
+from axonpath.training.config import TrainingConfig
+from axonpath.training.train import train
 
 def main():
-    parser = argparse.ArgumentParser(description="Train AimSegDL model")
+    parser = argparse.ArgumentParser(description="Train axonpath model")
 
     # Training hyperparameters
     parser.add_argument("--learning_rate", type=float, default=TrainingConfig.learning_rate, help="Learning rate")

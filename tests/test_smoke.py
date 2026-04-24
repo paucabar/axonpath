@@ -1,5 +1,5 @@
-"""
-Smoke tests for core aimsegdl components.
+﻿"""
+Smoke tests for core axonpath components.
 
 Run from the axonpath conda environment:
     pytest tests/test_smoke.py -v
@@ -18,7 +18,7 @@ import torch
 
 def test_normalize_range_and_shape():
     """normalize() must output values in [0, 1] and preserve spatial shape."""
-    from aimsegdl.utils.image_processing import normalize
+    from axonpath.utils.image_processing import normalize
 
     rng = np.random.default_rng(0)
     img = rng.integers(0, 4096, size=(512, 512), dtype=np.uint16).astype(np.float32)
@@ -35,7 +35,7 @@ def test_normalize_range_and_shape():
 
 def test_sdt_non_zero_for_labelled_image():
     """SDT for an image with objects must contain positive interior values."""
-    from aimsegdl.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
+    from axonpath.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
     label_img = np.zeros((64, 64), dtype=np.int32)
     label_img[10:30, 10:30] = 1   # one square object
@@ -50,7 +50,7 @@ def test_sdt_non_zero_for_labelled_image():
 
 def test_sdt_all_background_for_empty_image():
     """SDT for an all-zero label image must be all ≤ 0 (no interior)."""
-    from aimsegdl.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
+    from axonpath.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
     empty = np.zeros((64, 64), dtype=np.int32)
     sdt, _, _ = LabelDistanceTransforms(empty, alpha=0.3).skeleton_aware_dist_trans()
@@ -64,7 +64,7 @@ def test_sdt_all_background_for_empty_image():
 
 def test_model_forward_output_shape():
     """UNet must return 5-channel output matching spatial input dimensions."""
-    from aimsegdl.utils.model_building import model_fn
+    from axonpath.utils.model_building import model_fn
 
     model = model_fn("cpu", norm_type="batch")
     model.eval()
@@ -84,8 +84,8 @@ def test_model_forward_output_shape():
 
 def test_pipeline_preserves_spatial_dims():
     """Pipeline must return 3-channel output with the same H×W as the input."""
-    from aimsegdl.pipeline import Pipeline
-    from aimsegdl.utils.model_building import model_fn
+    from axonpath.pipeline import Pipeline
+    from axonpath.utils.model_building import model_fn
 
     model = model_fn("cpu", norm_type="batch")
     pipeline = Pipeline(model)
@@ -108,8 +108,8 @@ def test_pipeline_preserves_spatial_dims():
 
 def test_pipeline_custom_tile_size():
     """Pipeline must respect custom target_height / target_width and store them."""
-    from aimsegdl.pipeline import Pipeline
-    from aimsegdl.utils.model_building import model_fn
+    from axonpath.pipeline import Pipeline
+    from axonpath.utils.model_building import model_fn
 
     model = model_fn("cpu", norm_type="batch")
     pipeline = Pipeline(model, target_height=256, target_width=256)
@@ -134,7 +134,7 @@ def test_pipeline_custom_tile_size():
 
 def test_training_config_early_stopping_fields():
     """TrainingConfig must expose early_stopping_patience and early_stopping_min_delta."""
-    from aimsegdl.training.config import TrainingConfig
+    from axonpath.training.config import TrainingConfig
 
     cfg_default = TrainingConfig()
     assert cfg_default.early_stopping_patience == 0, "default patience must be 0 (disabled)"
@@ -151,7 +151,7 @@ def test_training_config_early_stopping_fields():
 
 def test_instance_segmentation_returns_integer_labels():
     """segment_instances_from_sdt must return a non-trivial integer label map."""
-    from aimsegdl.utils.image_processing import segment_instances_from_sdt
+    from axonpath.utils.image_processing import segment_instances_from_sdt
 
     # Build a synthetic SDT: two blobs with positive interior, -1 elsewhere
     sdt = np.full((64, 64), -1.0, dtype=np.float32)

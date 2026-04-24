@@ -1,14 +1,14 @@
-import argparse
-from aimsegdl.export_utils.create_bioimageio_model import export_bioimageio
-from aimsegdl.export_utils.config import BioimageioExportConfig
+﻿import argparse
+from axonpath.export_utils.create_bioimageio_model import export_bioimageio
+from axonpath.export_utils.config import BioimageioExportConfig
 
 def main():
-    parser = argparse.ArgumentParser(description="Export trained AimSegDL model to BioImage.IO format")
+    parser = argparse.ArgumentParser(description="Export trained axonpath model to BioImage.IO format")
 
     parser.add_argument("--model_path", type=str, required=True, help="Path to .pth weights file")
     parser.add_argument("--test_img_path", type=str, required=True, help="Path to sample input image")
     parser.add_argument("--output_dir", type=str, default="bioimageio_model", help="Output directory for BioImage.IO package")
-    parser.add_argument("--model_name", type=str, default="aimsegdl", help="Name of the model")
+    parser.add_argument("--model_name", type=str, default="axonpath", help="Name of the model")
     parser.add_argument("--model_version", type=str, default="0.1.0", help="Version of the model")
     parser.add_argument("--pixel_size", type=float, default=0.008, help="Pixel size in microns")
     parser.add_argument("--min_diameter", type=float, default=30.0, help="Expected minimum diameter")
@@ -38,10 +38,10 @@ def main():
         help="Minimum input tile size enforced by the Pipeline wrapper (default: 512)"
     )
     parser.add_argument(
-        "--predict_inner_tongue",
+        "--predict_inner_cylinder",
         action="store_true",
         default=False,
-        help="If passed, marks the model as predicting inner tongue (cylinder) in addition to fibre and axon"
+        help="If passed, marks the model as predicting Inner Cylinder in addition to fibre and axon"
     )
     parser.add_argument(
         "--validate",
@@ -61,7 +61,7 @@ def main():
         model_pixel_size=args.pixel_size,
         min_diameter=args.min_diameter,
         tile_size=args.tile_size,
-        predict_inner_tongue=args.predict_inner_tongue,
+        predict_inner_cylinder=args.predict_inner_cylinder,
         citation_text=args.citation_text,
         citation_doi=args.citation_doi,
         author_names=args.author_names,
