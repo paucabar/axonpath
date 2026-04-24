@@ -1,15 +1,15 @@
-import os
+﻿import os
 import numpy as np
 import torch
 from PIL import Image
 from pathlib import Path
 from scipy.ndimage import binary_fill_holes
 
-from aimsegdl.inference.inference import load_model
-from aimsegdl.pipeline import Pipeline
-from aimsegdl.utils.image_processing import normalize, segment_instances_from_sdt, map_axon_labels_to_fibres
-from aimsegdl.export_utils.config import BioimageioExportConfig
-from aimsegdl.utils.visualization import get_glasbey_cmap
+from axonpath.inference.inference import load_model
+from axonpath.pipeline import Pipeline
+from axonpath.utils.image_processing import normalize, segment_instances_from_sdt, map_axon_labels_to_fibres
+from axonpath.export_utils.config import BioimageioExportConfig
+from axonpath.utils.visualization import get_glasbey_cmap
 
 from bioimageio.spec.model.v0_5 import (
     ModelDescr,
@@ -54,7 +54,7 @@ def write_readme(config_bioimageio: BioimageioExportConfig) -> str:
         f.write(f"# {config_bioimageio.model_name}-{config_bioimageio.model_version}\n\n")
 
         # Purpose
-        f.write("This model segments axons and fibres using the AimSegDL framework.\n\n")
+        f.write("This model segments axons and fibres using the axonpath framework.\n\n")
 
         # Version & Licensing
         f.write(f"**Version**: {config_bioimageio.model_version}\n\n")
@@ -81,7 +81,7 @@ def write_readme(config_bioimageio: BioimageioExportConfig) -> str:
 
         # Usage note
         f.write("## Usage\n")
-        f.write("Refer to the AimSegDL documentation for inference and post-processing instructions.\n")
+        f.write("Refer to the axonpath documentation for inference and post-processing instructions.\n")
 
     return readme_filename
 
@@ -150,7 +150,7 @@ def generate_and_save_custom_cover(
 
 def export_bioimageio(config_bioimageio: BioimageioExportConfig):
     """
-    Export AimSegDL TorchScript model to a BioImage.IO package.
+    Export axonpath TorchScript model to a BioImage.IO package.
     """
     os.makedirs(config_bioimageio.output_dir, exist_ok=True)
 
@@ -237,7 +237,7 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
     model_descr = ModelDescr(
         name=config_bioimageio.model_name,
         version=config_bioimageio.model_version,
-        description="AimSegDL TorchScript model for axon/fibre segmentation.",
+        description="axonpath TorchScript model for axon/fibre segmentation.",
         authors=[Author(name=name) for name in config_bioimageio.author_names],
         license=LicenseId(config_bioimageio.license_id),
         documentation=RelativeFilePath(Path(os.path.relpath(os.path.join(config_bioimageio.output_dir, readme_filename)))),
@@ -255,7 +255,7 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
         config={
             "pixel_size": config_bioimageio.model_pixel_size, # custom field
             "min_diameter": config_bioimageio.min_diameter, # custom field
-            "predict_inner_tongue": config_bioimageio.predict_inner_tongue} # custom field
+            "predict_inner_cylinder": config_bioimageio.predict_inner_cylinder} # custom field
     )
 
     # Save model package

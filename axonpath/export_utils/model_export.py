@@ -1,6 +1,6 @@
-import torch
+﻿import torch
 import torch.nn as nn
-from aimsegdl.pipeline import Pipeline
+from axonpath.pipeline import Pipeline
 
 
 

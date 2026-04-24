@@ -1,4 +1,4 @@
-import torch
+﻿import torch
 import os
 import importlib.resources
 from pathlib import Path
@@ -7,8 +7,8 @@ from typing import Tuple
 from skimage.io import imread
 from skimage.morphology import remove_small_objects
 from monai.inferers import sliding_window_inference
-from aimsegdl.utils.model_building import model_fn
-from aimsegdl.utils.image_processing import (
+from axonpath.utils.model_building import model_fn
+from axonpath.utils.image_processing import (
     normalize,
     segment_instances_from_sdt,
     apply_semantic_segmentation_head,
@@ -32,7 +32,7 @@ def resolve_model_path(model_identifier: str) -> str:
     """
     Resolve a model path for inference.
 
-    - First, try loading a built-in pretrained weight from `aimsegdl.weights`.
+    - First, try loading a built-in pretrained weight from `axonpath.weights`.
     - If not found, fall back to the provided path.
 
     Args:
@@ -51,7 +51,7 @@ def resolve_model_path(model_identifier: str) -> str:
 
     # Try built-in package weights (name only, no extension)
     try:
-        ref = importlib.resources.files("aimsegdl.weights").joinpath(model_identifier + ".pth")
+        ref = importlib.resources.files("axonpath.weights").joinpath(model_identifier + ".pth")
         path = str(ref)
         if os.path.isfile(path):
             return path
@@ -97,7 +97,7 @@ def run_inference(
     min_diameter: float=30.0,
     sw_batch_size=1,
     overlap=0.5,
-    predict_inner_tongue: bool=True,
+    predict_inner_cylinder: bool=True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Inference using a PyTorch model (from .pth) with MONAI's sliding window inference.
@@ -109,11 +109,11 @@ def run_inference(
         roi_size (tuple): Sliding window size.
         sw_batch_size (int): Sliding window batch size.
         overlap (float): Overlap between windows.
-        predict_inner_tongue (bool): If False, skip axon/inner-cylinder postprocessing.
+        predict_inner_cylinder (bool): If False, skip axon/inner-cylinder postprocessing.
 
     Returns:
         labels_fibre (np.ndarray): Fibre instance labels.
-        labels_axon (np.ndarray): Axon instance labels, or None if predict_inner_tongue=False.
+        labels_axon (np.ndarray): Axon instance labels, or None if predict_inner_cylinder=False.
         semantic (np.ndarray): Semantic segmentation map.
     """
     model.eval()
@@ -147,7 +147,7 @@ def run_inference(
     # Instance segmentation
     labels_fibre = segment_instances_from_sdt(distancemap=dt_fibre, threshold=fibre_threshold, min_diameter=min_diameter, valid_mask=None, seed_mask=None)
 
-    if not predict_inner_tongue:
+    if not predict_inner_cylinder:
         return labels_fibre, None, semantic
 
     labels_axon = segment_instances_from_sdt(dt_axon, axon_threshold, min_axon_diameter)

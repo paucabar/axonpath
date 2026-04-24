@@ -1,18 +1,18 @@
-import torch
+﻿import torch
 import torch.nn as nn
 import numpy as np
 from skimage.measure import label
 from skimage.morphology import remove_small_objects
 from monai.metrics import DiceMetric
-from aimsegdl.utils.visualization import show_images
-from aimsegdl.utils.image_processing import (
+from axonpath.utils.visualization import show_images
+from axonpath.utils.image_processing import (
     apply_semantic_segmentation_head,
     segment_instances_from_sdt,
     fill_labels,
     map_axon_labels_to_fibres,
 )
-from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
-from aimsegdl.utils.losses import compute_loss
+from axonpath.evaluation.segmentation_evaluator import SegmentationEvaluator
+from axonpath.utils.losses import compute_loss
 
 
 def evaluate(
@@ -47,7 +47,7 @@ def evaluate(
             with torch.amp.autocast(device_type=device):
                 prediction = model(x)
 
-            val_losses.append(compute_loss(prediction, y, loss_fn, loss_weights).item())
+            val_losses.append(compute_loss(prediction.float(), y, loss_fn, loss_weights).item())
 
             # Dice
             sem_pred = apply_semantic_segmentation_head(prediction[:, 0:3])

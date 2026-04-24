@@ -1,7 +1,7 @@
-import torch
+﻿import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from aimsegdl.utils.image_processing import apply_semantic_segmentation_head_scriptable
+from axonpath.utils.image_processing import apply_semantic_segmentation_head_scriptable
 
 def pad_to_multiple(x: int, multiple: int) -> int:
     return (multiple - x % multiple) % multiple

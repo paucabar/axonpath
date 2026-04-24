@@ -1,5 +1,5 @@
-"""
-Smoke tests for the HPO pipeline (aimsegdl/training/hpo.py).
+﻿"""
+Smoke tests for the HPO pipeline (axonpath/training/hpo.py).
 
 Run from the axonpath conda environment with optuna installed:
     pytest tests/test_hpo.py -v
@@ -17,14 +17,14 @@ import pytest
 
 optuna = pytest.importorskip("optuna", reason="optuna not installed")
 
-from aimsegdl.training.hpo import (
+from axonpath.training.hpo import (
     _build_config,
     make_objective,
     run_study,
     write_outputs,
     _SUMMARY_COLUMNS,
 )
-from aimsegdl.training.config import TrainingConfig
+from axonpath.training.config import TrainingConfig
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +303,7 @@ def test_study_resumability(tile_dirs, tmp_path):
     )
 
     n_after_first = len(optuna.load_study(
-        study_name="aimsegdl_hpo",
+        study_name="axonpath_hpo",
         storage=f"sqlite:///{os.path.join(out, 'study.db')}",
     ).trials)
     assert n_after_first == 2, f"Expected 2 trials after first run, got {n_after_first}"
@@ -319,7 +319,7 @@ def test_study_resumability(tile_dirs, tmp_path):
     )
 
     n_after_resume = len(optuna.load_study(
-        study_name="aimsegdl_hpo",
+        study_name="axonpath_hpo",
         storage=f"sqlite:///{os.path.join(out, 'study.db')}",
     ).trials)
     assert n_after_resume == 3, (

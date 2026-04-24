@@ -1,13 +1,13 @@
-import argparse
+﻿import argparse
 import torch
-from aimsegdl.evaluation.evaluate_model import (
+from axonpath.evaluation.evaluate_model import (
     evaluate_model_on_testset,
     compute_imagewise_means,
     plot_summary_bar
 )
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate AimSegDL model on test set")
+    parser = argparse.ArgumentParser(description="Evaluate axonpath model on test set")
 
     parser.add_argument("--test_dir", type=str, required=True, help="Path to test tiles directory")
     parser.add_argument("--model_path", type=str, required=True, help="Path to trained model (.pth file)")

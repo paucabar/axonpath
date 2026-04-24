@@ -1,5 +1,5 @@
-"""
-Hyperparameter optimisation for aimsegdl models.
+﻿"""
+Hyperparameter optimisation for axonpath models.
 
 Requires: pip install optuna  (development tool — not in environment.yml)
 
@@ -42,12 +42,12 @@ study.db                 — SQLite study file (resumable with --resume)
 
 import argparse
 import torch
-from aimsegdl.training.hpo import run_study
+from axonpath.training.hpo import run_study
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Hyperparameter optimisation for aimsegdl",
+        description="Hyperparameter optimisation for axonpath",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 

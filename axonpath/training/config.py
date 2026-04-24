@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 import torch
 
 @dataclass
@@ -24,9 +24,9 @@ class TrainingConfig:
     min_diameter: float = 30.0      # pixels; axon minimum is derived as min_diameter / 2
     train_dir: str = "prepared_data/train_tiles/"
     val_dir: str = "prepared_data/val_tiles/"
-    pretrained_weights: str = None  # path to a .pth file or built-in weight name (e.g. 'aimsegdl')
+    pretrained_weights: str = None  # path to a .pth file or built-in weight name (e.g. 'axonpath')
     load_checkpoint: bool = False   # resume training from <output_dir>/model_checkpoint.pth.tar
-    model_name: str = "aimsegdl"
+    model_name: str = "axonpath"
     output_dir: str = "."           # all training outputs (weights, checkpoint, plots) are written here
     seed: int = None                # set for reproducible runs; None = non-deterministic
     use_lr_scheduler: bool = True   # ReduceLROnPlateau on val_loss (factor=0.5, patience=50)

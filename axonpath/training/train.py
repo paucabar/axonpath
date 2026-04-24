@@ -1,4 +1,4 @@
-import csv
+﻿import csv
 import json
 import random
 import torch
@@ -10,29 +10,29 @@ import numpy as np
 from dataclasses import asdict
 from pathlib import Path
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from aimsegdl.transforms.custom_transforms import transforms_fn
-from aimsegdl.utils import (
+from axonpath.transforms.custom_transforms import transforms_fn
+from axonpath.utils import (
     model_fn, get_datasets, get_loaders, load_checkpoint, save_checkpoint,
     evaluate, loss_plot_fn, loss_plot_log_fn, plot_segmentation_scores_fn
 )
-from aimsegdl.training.train_loop import train_loop
-from aimsegdl.training.config import TrainingConfig
-from aimsegdl.export_utils.model_export import export_torchscript_model
+from axonpath.training.train_loop import train_loop
+from axonpath.training.config import TrainingConfig
+from axonpath.export_utils.model_export import export_torchscript_model
 
 
 def get_pretrained_path(weight_name_or_path: str) -> str:
     """
     Return the full path to the specified pretrained weights file.
     - If a direct file path is provided and exists, it's returned as-is.
-    - Otherwise, locates the file inside the installed aimsegdl.weights package.
-    - Falls back to aimsegdl/weights/ when running from source.
+    - Otherwise, locates the file inside the installed axonpath.weights package.
+    - Falls back to axonpath/weights/ when running from source.
     """
     if os.path.isfile(weight_name_or_path):
         return weight_name_or_path
 
     # Installed package: resolve via importlib.resources
     try:
-        ref = importlib.resources.files("aimsegdl.weights").joinpath(weight_name_or_path + ".pth")
+        ref = importlib.resources.files("axonpath.weights").joinpath(weight_name_or_path + ".pth")
         path = str(ref)
         if os.path.isfile(path):
             return path

@@ -1,15 +1,15 @@
-import os
+﻿import os
 import torch
 from torch.utils.data import Dataset
 import numpy as np
 from tqdm import tqdm
 from glob import glob
-from aimsegdl.utils.image_processing import normalize
+from axonpath.utils.image_processing import normalize
 
 _EXPECTED_TILE_SIZE = (512, 512)
 
 
-class AimSegDataset(Dataset):
+class AxonPathDataset(Dataset):
     def __init__(self, tile_dir, transform=None, cache=False, _skip_size_check=False):
         self.tile_paths = sorted(glob(os.path.join(tile_dir, "*.npy")))
         print(f"Discovered {len(self.tile_paths)} .npy tiles in '{tile_dir}'")

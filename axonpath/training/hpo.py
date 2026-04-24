@@ -1,4 +1,4 @@
-"""
+﻿"""
 Hyperparameter optimisation using Optuna with ASHA pruning.
 
 Requires: pip install optuna  (not in environment.yml — development use only)
@@ -30,12 +30,12 @@ except ImportError as e:
         "optuna is required for HPO. Install it with: pip install optuna"
     ) from e
 
-from aimsegdl.training.config import TrainingConfig
-from aimsegdl.transforms.custom_transforms import transforms_fn
-from aimsegdl.utils.model_building import model_fn, get_loaders
-from aimsegdl.training.train_loop import train_loop
-from aimsegdl.utils.evaluation_helpers import evaluate
-from aimsegdl.dataset.aimseg_dataset import AimSegDataset
+from axonpath.training.config import TrainingConfig
+from axonpath.transforms.custom_transforms import transforms_fn
+from axonpath.utils.model_building import model_fn, get_loaders
+from axonpath.training.train_loop import train_loop
+from axonpath.utils.evaluation_helpers import evaluate
+from axonpath.dataset.axonpath_dataset import AxonPathDataset
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
     """
     Return a closure that Optuna calls for each trial.
 
-    _dataset_kwargs: extra kwargs forwarded to AimSegDataset (e.g. _skip_size_check=True
+    _dataset_kwargs: extra kwargs forwarded to AxonPathDataset (e.g. _skip_size_check=True
                      for unit tests using sub-512 synthetic tiles).
     """
     if _dataset_kwargs is None:
@@ -110,8 +110,8 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
 
         train_tf, val_tf = transforms_fn(image_height, image_width)
 
-        train_ds = AimSegDataset(train_dir, transform=train_tf, cache=True, **_dataset_kwargs)
-        val_ds = AimSegDataset(val_dir, transform=val_tf, cache=True, **_dataset_kwargs)
+        train_ds = AxonPathDataset(train_dir, transform=train_tf, cache=True, **_dataset_kwargs)
+        val_ds = AxonPathDataset(val_dir, transform=val_tf, cache=True, **_dataset_kwargs)
         train_ds.populate_cache()
         val_ds.populate_cache()
 
@@ -326,7 +326,7 @@ def run_study(
         seed: Seed for the Optuna sampler (reproducible trial sampling).
         image_height: Tile height (must match prepared data).
         image_width: Tile width (must match prepared data).
-        _dataset_kwargs: Extra kwargs for AimSegDataset (internal / test use).
+        _dataset_kwargs: Extra kwargs for AxonPathDataset (internal / test use).
     """
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -334,7 +334,7 @@ def run_study(
     os.makedirs(output_dir, exist_ok=True)
     db_path = os.path.join(output_dir, "study.db")
     storage = f"sqlite:///{db_path}"
-    study_name = "aimsegdl_hpo"
+    study_name = "axonpath_hpo"
 
     sampler = optuna.samplers.TPESampler(seed=seed)
     pruner = optuna.pruners.SuccessiveHalvingPruner(

@@ -1,7 +1,7 @@
-import torch
+﻿import torch
 from tqdm import tqdm
 import numpy as np
-from aimsegdl.utils.losses import compute_loss
+from axonpath.utils.losses import compute_loss
 
 def train_loop(loader, model, optimizer, loss_fns, scaler, device, loss_weights=(1.0, 1.0, 1.0)):
     loop = tqdm(loader)

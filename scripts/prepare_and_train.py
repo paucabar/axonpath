@@ -1,13 +1,13 @@
-import argparse
+﻿import argparse
 import os
 import torch
-from aimsegdl.training.config import TrainingConfig
-from aimsegdl.training.train import train
-from aimsegdl.data_preparation.data_preparation import split_dataset
+from axonpath.training.config import TrainingConfig
+from axonpath.training.train import train
+from axonpath.data_preparation.data_preparation import split_dataset
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train AimSegDL model")
+    parser = argparse.ArgumentParser(description="Train axonpath model")
 
     # Data preparation options
     parser.add_argument("--data_input", type=str, default="datasets", help="Input folder with raw datasets")

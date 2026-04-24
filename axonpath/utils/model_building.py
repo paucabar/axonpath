@@ -1,10 +1,10 @@
-import torch
+﻿import torch
 import numpy as np
 import random
 from torch.utils.data import DataLoader
 from monai.networks.nets import UNet
 from monai.networks.layers import Norm
-from aimsegdl.dataset.aimseg_dataset import AimSegDataset
+from axonpath.dataset.axonpath_dataset import AxonPathDataset
 
 
 
@@ -35,12 +35,12 @@ def get_datasets(
         train_transform,
         val_transform,
     ):
-    train_dataset = AimSegDataset(
+    train_dataset = AxonPathDataset(
         tile_dir=train_tile_dir,
         transform=train_transform,
         cache=True
     )
-    val_dataset = AimSegDataset(
+    val_dataset = AxonPathDataset(
         tile_dir=val_tile_dir,
         transform=val_transform,
         cache=True

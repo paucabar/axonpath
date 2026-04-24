@@ -1,4 +1,4 @@
-import os
+﻿import os
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage.measure import label
@@ -6,11 +6,11 @@ from skimage.morphology import remove_small_objects
 import csv
 import pandas as pd
 from tqdm import tqdm
-from aimsegdl.evaluation.segmentation_evaluator import SegmentationEvaluator
-from aimsegdl.inference.inference import load_model, run_inference
-from aimsegdl.dataset.aimseg_dataset import AimSegDataset
-from aimsegdl.utils.visualization import plot_iou_distributions
-from aimsegdl.utils.image_processing import fill_labels, map_axon_labels_to_fibres, remove_unmapped_labels
+from axonpath.evaluation.segmentation_evaluator import SegmentationEvaluator
+from axonpath.inference.inference import load_model, run_inference
+from axonpath.dataset.axonpath_dataset import AxonPathDataset
+from axonpath.utils.visualization import plot_iou_distributions
+from axonpath.utils.image_processing import fill_labels, map_axon_labels_to_fibres, remove_unmapped_labels
 
 def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, pred_inner_tongue, figsize=(20, 16), title=None):
     """
@@ -95,7 +95,7 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
     model = load_model(model_path, device=device)
 
     # Load test set
-    dataset = AimSegDataset(test_dir)
+    dataset = AxonPathDataset(test_dir)
     if len(dataset) == 0:
         raise ValueError(
             f"No tiles found in '{test_dir}'. "

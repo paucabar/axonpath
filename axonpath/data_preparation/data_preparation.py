@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 import hashlib
 from skimage import io
@@ -8,8 +8,8 @@ import numpy as np
 import csv
 from skimage.measure import label
 from skimage.segmentation import clear_border
-from aimsegdl.utils.image_processing import fill_labels
-from aimsegdl.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
+from axonpath.utils.image_processing import fill_labels
+from axonpath.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
 _MANIFEST_FILE = "manifest.json"
 

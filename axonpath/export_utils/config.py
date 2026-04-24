@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+﻿from dataclasses import dataclass, field
 from typing import List, Optional
 
 
@@ -12,7 +12,7 @@ class BioimageioExportConfig:
     model_pixel_size: float               # µm per pixel
     min_diameter: float                    # Minimum expected diameter
     tile_size: int = 512                   # Minimum input tile size enforced by the Pipeline wrapper
-    predict_inner_tongue: bool = True      # Only predicts fibre and axon if false
+    predict_inner_cylinder: bool = True      # Only predicts fibre and axon if false
     readme_text: Optional[str] = None      # Optional custom README text
     cover_image: Optional[str] = None      # Optional manual cover path override
     citation_text: Optional[str] = None    # Optional citation string
