@@ -59,6 +59,19 @@ def train(config: TrainingConfig):
     device = config.device
     norm_type = "instance" if config.batch_size < 8 else "batch"
 
+    # If pretrained weights are provided, read their stored norm_type so the model
+    # is built with matching normalisation layers before the state_dict is loaded.
+    pretrained_path = None
+    if config.pretrained_weights:
+        pretrained_path = get_pretrained_path(config.pretrained_weights)
+        ckpt_peek = torch.load(pretrained_path, map_location="cpu", weights_only=True)
+        stored_norm_type = ckpt_peek.get("norm_type", norm_type)
+        if stored_norm_type != norm_type:
+            print(f"Pretrained weights use norm_type='{stored_norm_type}' "
+                  f"(batch_size={config.batch_size} would give '{norm_type}'). "
+                  f"Using '{stored_norm_type}' to match pretrained weights.")
+            norm_type = stored_norm_type
+
     config_dict = asdict(config)
     config_dict["norm_type"] = norm_type
     if config.load_checkpoint:
@@ -100,10 +113,9 @@ def train(config: TrainingConfig):
     best_weights_path = os.path.join(config.output_dir, "best_weights_model.pth")
     last_weights_path = os.path.join(config.output_dir, "last_epoch_model.pth")
 
-    if config.pretrained_weights:
-        pretrained_path = get_pretrained_path(config.pretrained_weights)
+    if pretrained_path:
         print(f"Loading pretrained weights from {pretrained_path}")
-        model.load_state_dict(torch.load(pretrained_path, map_location=device, weights_only=True)["state_dict"])
+        model.load_state_dict(ckpt_peek["state_dict"])
     elif config.load_checkpoint:
         checkpoint = torch.load(checkpoint_path, weights_only=False)
         last_epoch, train_loss, val_loss, f1_fibre, f1_axon, f1_inner_cylinder, balanced_seg_score, best_score = \
