@@ -41,7 +41,7 @@ def main():
         "--predict_inner_cylinder",
         action="store_true",
         default=False,
-        help="If passed, marks the model as predicting inner tongue (cylinder) in addition to fibre and axon"
+        help="If passed, marks the model as predicting Inner Cylinder in addition to fibre and axon"
     )
     parser.add_argument(
         "--validate",

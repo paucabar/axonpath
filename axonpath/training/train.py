@@ -87,7 +87,7 @@ def train(config: TrainingConfig):
         scheduler = ReduceLROnPlateau(optimizer, factor=0.5, patience=50, min_lr=1e-6)
 
     train_loss, val_loss = [], []
-    f1_fibre, f1_axon, f1_inner_tongue = [], [], []
+    f1_fibre, f1_axon, f1_inner_cylinder = [], [], []
     balanced_seg_score, best_score = [], 0
     last_epoch = 0
     _es_best = 0.0
@@ -106,7 +106,7 @@ def train(config: TrainingConfig):
         model.load_state_dict(torch.load(pretrained_path, map_location=device, weights_only=True)["state_dict"])
     elif config.load_checkpoint:
         checkpoint = torch.load(checkpoint_path, weights_only=False)
-        last_epoch, train_loss, val_loss, f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score, best_score = \
+        last_epoch, train_loss, val_loss, f1_fibre, f1_axon, f1_inner_cylinder, balanced_seg_score, best_score = \
             load_checkpoint(checkpoint, model, optimizer)
         if scheduler is not None and "scheduler" in checkpoint and checkpoint["scheduler"] is not None:
             scheduler.load_state_dict(checkpoint["scheduler"])
@@ -128,7 +128,7 @@ def train(config: TrainingConfig):
         val_loss.append(v_loss)
         f1_fibre.append(f1_fib)
         f1_axon.append(f1_ax)
-        f1_inner_tongue.append(f1_in)
+        f1_inner_cylinder.append(f1_in)
 
         score = (f1_fib + f1_ax + f1_in) / 3
         balanced_seg_score.append(score)
@@ -146,7 +146,7 @@ def train(config: TrainingConfig):
         with open(csv_path, "a", newline="") as f:
             writer = csv.writer(f)
             if not _csv_header_written:
-                writer.writerow(["epoch", "train_loss", "val_loss", "f1_fibre", "f1_axon", "f1_inner_tongue", "balanced_seg_score"])
+                writer.writerow(["epoch", "train_loss", "val_loss", "f1_fibre", "f1_axon", "f1_inner_cylinder", "balanced_seg_score"])
                 _csv_header_written = True
             writer.writerow([epoch + 1 + last_epoch, t_loss, v_loss, f1_fib, f1_ax, f1_in, score])
 
@@ -173,7 +173,7 @@ def train(config: TrainingConfig):
             "val_loss": val_loss,
             "f1_fibre": f1_fibre,
             "f1_axon": f1_axon,
-            "f1_inner_tongue": f1_inner_tongue,
+            "f1_inner_cylinder": f1_inner_cylinder,
             "balanced_segmentation_score": balanced_seg_score,
             "best_score": best_score,
         }, filename=checkpoint_path)
@@ -181,7 +181,7 @@ def train(config: TrainingConfig):
     torch.save({"state_dict": model.state_dict(), "norm_type": norm_type}, last_weights_path)
     loss_plot_fn(train_loss, val_loss, output_dir=config.output_dir)
     loss_plot_log_fn(train_loss, val_loss, output_dir=config.output_dir)
-    plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg_score, output_dir=config.output_dir)
+    plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_cylinder, balanced_seg_score, output_dir=config.output_dir)
 
     # Export torchscript model
     export_model = model_fn(config.device, norm_type=norm_type)

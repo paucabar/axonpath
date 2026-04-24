@@ -1,4 +1,4 @@
-import os
+﻿import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
@@ -144,7 +144,7 @@ def loss_plot_log_fn(train_loss, val_loss, output_dir="."):
     plt.close(fig)
 
 
-def plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_segmentation_score, output_dir="."):
+def plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_cylinder, balanced_segmentation_score, output_dir="."):
     print("\n----------------------------------------------------------------------------")
     print("Segmentation metric trends over epochs")
 
@@ -153,7 +153,7 @@ def plot_segmentation_scores_fn(f1_fibre, f1_axon, f1_inner_tongue, balanced_seg
 
     ax.plot(epochs, f1_fibre, label="F1 Fibre")
     ax.plot(epochs, f1_axon, label="F1 Axon")
-    ax.plot(epochs, f1_inner_tongue, label="F1 Inner Tongue")
+    ax.plot(epochs, f1_inner_cylinder, label="F1 Inner Cylinder")
     ax.plot(epochs, balanced_segmentation_score, label="Balanced Segmentation Score")
 
     best_epoch = np.argmax(balanced_segmentation_score) + 1

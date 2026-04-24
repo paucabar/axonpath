@@ -1,4 +1,4 @@
-import torch
+﻿import torch
 from scipy.ndimage import binary_fill_holes
 from skimage.measure import regionprops, label
 from skimage.segmentation import watershed, find_boundaries
@@ -219,7 +219,7 @@ def map_axon_labels_to_fibres(
 
     Parameters:
         label_img1 (np.ndarray): Reference label image (e.g., fibres).
-        label_img2 (np.ndarray): Fragment label image to map (e.g., inner tongue).
+        label_img2 (np.ndarray): Fragment label image to map (e.g., Inner Cylinder).
         min_overlap_frac (float): Minimum IoC for a mapping to be accepted. Default = 0.9.
 
     Returns:
@@ -292,7 +292,7 @@ def get_edge_touching_labels(label_img: np.ndarray) -> set:
 
 def remove_edge_touching_labels(
     fibre_labels: np.ndarray,
-    inner_tongue_labels: np.ndarray,
+    inner_cylinder_labels: np.ndarray,
     axon_labels: np.ndarray = None
 ) -> tuple:
     """
@@ -302,33 +302,33 @@ def remove_edge_touching_labels(
     ----------
     fibre_labels : np.ndarray
         Labeled image of fibre instances (2D).
-    inner_tongue_labels : np.ndarray
-        Labeled image of inner-tongue instances (2D).
+    inner_cylinder_labels : np.ndarray
+        Labeled image of inner cylinder instances (2D).
     axon_labels : np.ndarray, optional
         Labeled image of axon instances (2D). If provided, these labels will also be cleaned.
 
     Returns
     -------
     tuple
-        Cleaned (fibre_labels, inner_tongue_labels, axon_labels) as np.ndarrays.
+        Cleaned (fibre_labels, inner_cylinder_labels, axon_labels) as np.ndarrays.
         If `axon_labels` was not provided, returns only two arrays.
     """
     edge_labels = get_edge_touching_labels(fibre_labels)
     if not edge_labels:
-        return (fibre_labels, inner_tongue_labels, axon_labels) if axon_labels is not None else (fibre_labels, inner_tongue_labels)
+        return (fibre_labels, inner_cylinder_labels, axon_labels) if axon_labels is not None else (fibre_labels, inner_cylinder_labels)
 
     # Remove edge-touching labels from all relevant maps
     fibre_labels = fibre_labels.copy()
-    inner_tongue_labels = inner_tongue_labels.copy()
+    inner_cylinder_labels = inner_cylinder_labels.copy()
     fibre_labels[np.isin(fibre_labels, list(edge_labels))] = 0
-    inner_tongue_labels[np.isin(inner_tongue_labels, list(edge_labels))] = 0
+    inner_cylinder_labels[np.isin(inner_cylinder_labels, list(edge_labels))] = 0
 
     if axon_labels is not None:
         axon_labels = axon_labels.copy()
         axon_labels[np.isin(axon_labels, list(edge_labels))] = 0
-        return fibre_labels, inner_tongue_labels, axon_labels
+        return fibre_labels, inner_cylinder_labels, axon_labels
 
-    return fibre_labels, inner_tongue_labels
+    return fibre_labels, inner_cylinder_labels
 
 def remove_unmapped_labels(label_img: np.ndarray, mapped_img: np.ndarray) -> np.ndarray:
     """

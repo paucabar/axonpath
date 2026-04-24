@@ -12,17 +12,17 @@ from axonpath.dataset.axonpath_dataset import AxonPathDataset
 from axonpath.utils.visualization import plot_iou_distributions
 from axonpath.utils.image_processing import fill_labels, map_axon_labels_to_fibres, remove_unmapped_labels
 
-def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, pred_inner_tongue, figsize=(20, 16), title=None):
+def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_cylinder, pred_fibre, pred_axon, pred_inner_cylinder, figsize=(20, 16), title=None):
     """
     Plots ground truth and predicted segmentation masks for fibre and axon.
 
     Args:
         gt_fibre (np.ndarray): Ground truth fibre mask.
         gt_axon (np.ndarray): Ground truth axon mask.
-        gt_inner_tongue (np.ndarray): Ground truth inner tongue mask.
+        gt_inner_cylinder (np.ndarray): Ground truth Inner Cylinder mask.
         pred_fibre (np.ndarray): Predicted fibre mask.
         pred_axon (np.ndarray): Predicted axon mask.
-        pred_inner_tongue (np.ndarray): Predicted inner tongue mask.
+        pred_inner_cylinder (np.ndarray): Predicted Inner Cylinder mask.
         figsize (tuple): Size of the figure.
         title (str): Optional overall title for the plot.
     """
@@ -39,8 +39,8 @@ def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre,
     axes[0, 1].set_title("GT Axon")
     axes[0, 1].axis('off')
 
-    axes[0, 2].imshow(gt_inner_tongue, cmap='nipy_spectral', interpolation="nearest")
-    axes[0, 2].set_title("GT Inner Tongue")
+    axes[0, 2].imshow(gt_inner_cylinder, cmap='nipy_spectral', interpolation="nearest")
+    axes[0, 2].set_title("GT Inner Cylinder")
     axes[0, 2].axis('off')
 
     axes[1, 0].imshow(pred_fibre, cmap='nipy_spectral', interpolation="nearest")
@@ -51,8 +51,8 @@ def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre,
     axes[1, 1].set_title("Predicted Axon")
     axes[1, 1].axis('off')
 
-    axes[1, 2].imshow(pred_inner_tongue, cmap='nipy_spectral', interpolation="nearest")
-    axes[1, 2].set_title("Predicted Inner Tongue")
+    axes[1, 2].imshow(pred_inner_cylinder, cmap='nipy_spectral', interpolation="nearest")
+    axes[1, 2].set_title("Predicted Inner Cylinder")
     axes[1, 2].axis('off')
 
     plt.tight_layout()
@@ -106,7 +106,7 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
     columns = ["Image_Name", "Threshold", "F1", "Precision", "Recall", "TP", "FP", "FN"]
     fibre_results = pd.DataFrame(columns=columns)
     axon_results = pd.DataFrame(columns=columns)
-    inner_tongue_results = pd.DataFrame(columns=columns)
+    inner_cylinder_results = pd.DataFrame(columns=columns)
 
     for idx, path in enumerate(tqdm(dataset.tile_paths, desc="Evaluating tiles")):
         tile_name = os.path.splitext(os.path.basename(path))[0]
@@ -114,56 +114,56 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
         image, masks = sample
 
         pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device, min_diameter=min_diameter)
-        pred_inner_tongue = label(pred_semantic == 2, connectivity=2)
+        pred_inner_cylinder = label(pred_semantic == 2, connectivity=2)
 
-        # Estimate inner tongue min area from min_diameter
-        min_diameter_inner_tongue = min_diameter / 2
-        radius = min_diameter_inner_tongue / 2
+        # Estimate Inner Cylinder min area from min_diameter
+        min_diameter_inner_cylinder = min_diameter / 2
+        radius = min_diameter_inner_cylinder / 2
         min_area = int(np.pi * radius ** 2)
-        pred_inner_tongue = fill_labels(pred_inner_tongue)
-        pred_inner_tongue = label(
-            remove_small_objects(pred_inner_tongue > 0, min_size=max(1, min_area), connectivity=2),
+        pred_inner_cylinder = fill_labels(pred_inner_cylinder)
+        pred_inner_cylinder = label(
+            remove_small_objects(pred_inner_cylinder > 0, min_size=max(1, min_area), connectivity=2),
             connectivity=2,
         )
-        mapped_inner_tongue = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
+        mapped_inner_cylinder = map_axon_labels_to_fibres(pred_fibre, pred_inner_cylinder)
 
         gt_fibre = masks[0].numpy()
         gt_axon = masks[1].numpy()
         gt_sem = masks[2].numpy()
 
-        gt_inner_tongue = label(gt_sem == 2, connectivity=2)
+        gt_inner_cylinder = label(gt_sem == 2, connectivity=2)
 
         fibre_eval = SegmentationEvaluator(gt_fibre, pred_fibre)
         axon_eval = SegmentationEvaluator(gt_axon, pred_axon)
-        inner_tongue_eval = SegmentationEvaluator(gt_inner_tongue, mapped_inner_tongue)
+        inner_cylinder_eval = SegmentationEvaluator(gt_inner_cylinder, mapped_inner_cylinder)
 
         fibre_results = fibre_eval.evaluate_multiple_thresholds(tile_name, fibre_results)
         axon_results = axon_eval.evaluate_multiple_thresholds(tile_name, axon_results)
-        inner_tongue_results = inner_tongue_eval.evaluate_multiple_thresholds(tile_name, inner_tongue_results)
+        inner_cylinder_results = inner_cylinder_eval.evaluate_multiple_thresholds(tile_name, inner_cylinder_results)
 
         if display_figure:
             # Filter rows by tile name
             fibre_f1_filtered = fibre_results["F1"][fibre_results["Image_Name"] == tile_name]
             axon_f1_filtered = axon_results["F1"][axon_results["Image_Name"] == tile_name]
-            inner_tongue__f1_filtered = inner_tongue_results["F1"][inner_tongue_results["Image_Name"] == tile_name]
+            inner_cylinder__f1_filtered = inner_cylinder_results["F1"][inner_cylinder_results["Image_Name"] == tile_name]
 
             # Compute means
             mean_f1_fibre = fibre_f1_filtered.mean()
             mean_f1_axon = axon_f1_filtered.mean()
-            mean_f1_inner_tongue = inner_tongue__f1_filtered.mean()
+            mean_f1_inner_cylinder = inner_cylinder__f1_filtered.mean()
 
             # Create title
-            title = f"{tile_name} | Mean F1 Fibre: {mean_f1_fibre:.3f} | Mean F1 Axon: {mean_f1_axon:.3f} | Mean F1 Inner Tongue: {mean_f1_inner_tongue:.3f}"
+            title = f"{tile_name} | Mean F1 Fibre: {mean_f1_fibre:.3f} | Mean F1 Axon: {mean_f1_axon:.3f} | Mean F1 Inner Cylinder: {mean_f1_inner_cylinder:.3f}"
 
             # Plot
-            plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_tongue, pred_fibre, pred_axon, mapped_inner_tongue, figsize=(10, 8), title=title)
+            plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_cylinder, pred_fibre, pred_axon, mapped_inner_cylinder, figsize=(10, 8), title=title)
 
 
     if output_csv:
         base = os.path.splitext(output_csv)[0]
         fibre_path = base + "_Fibre.tsv"
         axon_path = base + "_Axon.tsv"
-        inner_tongue_path = base + "_Inner_Tongue.tsv"
+        inner_cylinder_path = base + "_inner_cylinder.tsv"
 
         with open(fibre_path, mode='w', newline='') as f:
             writer = csv.writer(f, delimiter='\t')
@@ -175,16 +175,16 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
             writer.writerow(axon_results.columns)
             writer.writerows(axon_results.values)
 
-        with open(inner_tongue_path, mode='w', newline='') as f:
+        with open(inner_cylinder_path, mode='w', newline='') as f:
             writer = csv.writer(f, delimiter='\t')
-            writer.writerow(inner_tongue_results.columns)
-            writer.writerows(inner_tongue_results.values)
+            writer.writerow(inner_cylinder_results.columns)
+            writer.writerows(inner_cylinder_results.values)
 
-        print(f"\nSaved results to:\n- {fibre_path}\n- {axon_path}\n- {inner_tongue_path}")
+        print(f"\nSaved results to:\n- {fibre_path}\n- {axon_path}\n- {inner_cylinder_path}")
 
     if show_plots:
         plot_iou_distributions(fibre_results, label="Fibre", output_dir=output_dir)
         plot_iou_distributions(axon_results, label="Axon", output_dir=output_dir)
-        plot_iou_distributions(inner_tongue_results, label="Inner_Tongue", output_dir=output_dir)
+        plot_iou_distributions(inner_cylinder_results, label="inner_cylinder", output_dir=output_dir)
 
-    return fibre_results, axon_results, inner_tongue_results
+    return fibre_results, axon_results, inner_cylinder_results

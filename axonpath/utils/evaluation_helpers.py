@@ -31,11 +31,11 @@ def evaluate(
     Evaluate the model on the given loader with F1, Dice and loss metrics.
 
     Returns:
-        Tuple: (mean_val_loss, mean_f1_fibre, mean_f1_axon, mean_f1_inner_tongue, dice_score)
+        Tuple: (mean_val_loss, mean_f1_fibre, mean_f1_axon, mean_f1_inner_cylinder, dice_score)
     """
     model.eval()
     val_losses = []
-    f1_scores_fibre, f1_scores_axon, f1_scores_inner_tongue = [], [], []
+    f1_scores_fibre, f1_scores_axon, f1_scores_inner_cylinder = [], [], []
     dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False, num_classes=3)
     axon_min_diameter = min_diameter / 2
 
@@ -69,7 +69,7 @@ def evaluate(
                 )
                 f1_scores_fibre.append(scores[0])
                 f1_scores_axon.append(scores[1])
-                f1_scores_inner_tongue.append(scores[2])
+                f1_scores_inner_cylinder.append(scores[2])
 
         dice_score = dice_metric.aggregate().item()
         dice_metric.reset()
@@ -83,7 +83,7 @@ def evaluate(
         np.mean(val_losses),
         np.mean(f1_scores_fibre) if f1_scores_fibre else 0.0,
         np.mean(f1_scores_axon) if f1_scores_axon else 0.0,
-        np.mean(f1_scores_inner_tongue) if f1_scores_inner_tongue else 0.0,
+        np.mean(f1_scores_inner_cylinder) if f1_scores_inner_cylinder else 0.0,
         dice_score
     )
 
@@ -95,25 +95,25 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
 
     pred_sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
 
-    # Inner tongue postprocessing aligned with test eval and extension:
+    # Inner Cylinder postprocessing aligned with test eval and extension:
     # fill holes → remove small objects → map to fibres
-    min_diameter_inner_tongue = min_diameter / 2
-    radius = min_diameter_inner_tongue / 2
+    min_diameter_inner_cylinder = min_diameter / 2
+    radius = min_diameter_inner_cylinder / 2
     min_area = int(np.pi * radius ** 2)
 
-    pred_inner_tongue = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32), connectivity=2)
-    pred_inner_tongue = fill_labels(pred_inner_tongue)
-    pred_inner_tongue = label(
-        remove_small_objects(pred_inner_tongue > 0, min_size=max(1, min_area), connectivity=2),
+    pred_inner_cylinder = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32), connectivity=2)
+    pred_inner_cylinder = fill_labels(pred_inner_cylinder)
+    pred_inner_cylinder = label(
+        remove_small_objects(pred_inner_cylinder > 0, min_size=max(1, min_area), connectivity=2),
         connectivity=2
     )
-    pred_inner_tongue = map_axon_labels_to_fibres(pred_fibre, pred_inner_tongue)
+    pred_inner_cylinder = map_axon_labels_to_fibres(pred_fibre, pred_inner_cylinder)
 
     # Ground truth
     gt_fibre = target[0].cpu().numpy().astype(np.int32)
     gt_axon = target[1].cpu().numpy().astype(np.int32)
     gt_sem = target[2].cpu().numpy().astype(np.int32)
-    gt_inner_tongue = label((gt_sem == 2).astype(np.int32), connectivity=2)
+    gt_inner_cylinder = label((gt_sem == 2).astype(np.int32), connectivity=2)
 
     fibre_eval = SegmentationEvaluator(gt_fibre, pred_fibre)
     f1_fibre = fibre_eval.f1_mean(fibre_eval.evaluate_multiple_thresholds(f"sample_{index}_fibre"))
@@ -121,10 +121,10 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     axon_eval = SegmentationEvaluator(gt_axon, pred_axon)
     f1_axon = axon_eval.f1_mean(axon_eval.evaluate_multiple_thresholds(f"sample_{index}_axon"))
 
-    inner_tongue_eval = SegmentationEvaluator(gt_inner_tongue, pred_inner_tongue)
-    f1_inner_tongue = inner_tongue_eval.f1_mean(inner_tongue_eval.evaluate_multiple_thresholds(f"sample_{index}_inner_tongue"))
+    inner_cylinder_eval = SegmentationEvaluator(gt_inner_cylinder, pred_inner_cylinder)
+    f1_inner_cylinder = inner_cylinder_eval.f1_mean(inner_cylinder_eval.evaluate_multiple_thresholds(f"sample_{index}_inner_cylinder"))
 
-    return f1_fibre, f1_axon, f1_inner_tongue
+    return f1_fibre, f1_axon, f1_inner_cylinder
 
 
 def plot_example(x, y, pred, fibre_threshold, axon_threshold, min_diameter, axon_min_diameter, output_dir="."):

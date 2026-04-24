@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import pandas as pd
 from math import sqrt, pi
 from skimage.measure import regionprops
@@ -137,7 +137,7 @@ def local_confluence(label_img, label_id, window_size_px):
 
 #  Main measurement table
 
-def metrics_table(fibre_labels, inner_tongue_labels, pixel_size_um,
+def metrics_table(fibre_labels, inner_cylinder_labels, pixel_size_um,
                   axon_labels=None, window_size_px=128):
     """
     Compute morphometric and spatial measurements for labelled fibres.
@@ -146,8 +146,8 @@ def metrics_table(fibre_labels, inner_tongue_labels, pixel_size_um,
     ----------
     fibre_labels : np.ndarray
         Label image of fibres (unique integer IDs).
-    inner_tongue_labels : np.ndarray
-        Label image of mapped inner tongues.
+    inner_cylinder_labels : np.ndarray
+        Label image of mapped Inner Cylinders.
     pixel_size_um : float
         Pixel size in micrometers.
     axon_labels : np.ndarray, optional
@@ -169,8 +169,8 @@ def metrics_table(fibre_labels, inner_tongue_labels, pixel_size_um,
         area_um2 = area_px * (px_um ** 2)
         fibre_diam_um = compute_diameter_from_area(area_um2)
 
-        # Inner tongue
-        inner_area_px = np.sum(inner_tongue_labels == lbl)
+        # Inner Cylinder
+        inner_area_px = np.sum(inner_cylinder_labels == lbl)
         inner_area_um2 = inner_area_px * (px_um ** 2)
         inner_diam_um = compute_diameter_from_area(inner_area_um2)
         g_ratio_inner = inner_diam_um / fibre_diam_um if fibre_diam_um > 0 else np.nan
@@ -225,7 +225,7 @@ def metrics_table(fibre_labels, inner_tongue_labels, pixel_size_um,
 
 #  Single metric query
 
-def single_metric(fibre_labels, inner_tongue_labels, pixel_size_um,
+def single_metric(fibre_labels, inner_cylinder_labels, pixel_size_um,
                   metric_name, label_id=None, axon_labels=None, window_size_px=128):
     """
     Compute one specific metric, either for a given label or all labels.
@@ -234,8 +234,8 @@ def single_metric(fibre_labels, inner_tongue_labels, pixel_size_um,
     ----------
     fibre_labels : np.ndarray
         Label image of fibres.
-    inner_tongue_labels : np.ndarray
-        Label image of mapped inner tongues.
+    inner_cylinder_labels : np.ndarray
+        Label image of mapped Inner Cylinders.
     pixel_size_um : float
         Pixel size in micrometers.
     metric_name : str
@@ -252,7 +252,7 @@ def single_metric(fibre_labels, inner_tongue_labels, pixel_size_um,
     float or pd.Series
         Single value if label_id is given, otherwise a pandas Series for all fibres.
     """
-    df = metrics_table(fibre_labels, inner_tongue_labels, pixel_size_um,
+    df = metrics_table(fibre_labels, inner_cylinder_labels, pixel_size_um,
                        axon_labels=axon_labels, window_size_px=window_size_px)
 
     if metric_name not in df.columns:

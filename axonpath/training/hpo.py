@@ -11,7 +11,7 @@ loss_weight_mse_fibre uniform     [0.5, 3.0]  (CE weight fixed at 1.0)
 loss_weight_mse_axon  uniform     [0.5, 3.0]
 
 Intermediate value reported to the pruner: val_loss (each epoch).
-Trial objective (maximised): mean F1 across fibre / axon / inner_tongue on val set.
+Trial objective (maximised): mean F1 across fibre / axon / inner_cylinder on val set.
 """
 
 import os
@@ -121,19 +121,19 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
         )
 
         val_loss_final = float("inf")
-        f1_fibre = f1_axon = f1_inner_tongue = 0.0
+        f1_fibre = f1_axon = f1_inner_cylinder = 0.0
 
         for epoch in range(config.num_epochs):
             train_loop(train_loader, model, optimizer, loss_fns, scaler,
                        device, config.loss_weights)
 
-            val_loss_final, f1_fibre, f1_axon, f1_inner_tongue, _ = evaluate(
+            val_loss_final, f1_fibre, f1_axon, f1_inner_cylinder, _ = evaluate(
                 val_loader, model, loss_fns, device,
                 min_diameter=config.min_diameter,
                 loss_weights=config.loss_weights,
             )
 
-            mean_f1 = (f1_fibre + f1_axon + f1_inner_tongue) / 3.0
+            mean_f1 = (f1_fibre + f1_axon + f1_inner_cylinder) / 3.0
             trial.report(mean_f1, epoch)
             if trial.should_prune():
                 trial.set_user_attr("epochs_run", epoch + 1)
@@ -141,11 +141,11 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
 
         trial.set_user_attr("f1_fibre", round(f1_fibre, 6))
         trial.set_user_attr("f1_axon", round(f1_axon, 6))
-        trial.set_user_attr("f1_inner_tongue", round(f1_inner_tongue, 6))
+        trial.set_user_attr("f1_inner_cylinder", round(f1_inner_cylinder, 6))
         trial.set_user_attr("val_loss_final", round(val_loss_final, 6))
         trial.set_user_attr("epochs_run", config.num_epochs)
 
-        return (f1_fibre + f1_axon + f1_inner_tongue) / 3.0
+        return (f1_fibre + f1_axon + f1_inner_cylinder) / 3.0
 
     return objective
 
@@ -157,7 +157,7 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
 _SUMMARY_COLUMNS = [
     "trial_id", "state", "objective_f1", "val_loss_final", "epochs_run",
     "learning_rate", "batch_size", "loss_weight_mse_fibre", "loss_weight_mse_axon",
-    "f1_fibre", "f1_axon", "f1_inner_tongue",
+    "f1_fibre", "f1_axon", "f1_inner_cylinder",
 ]
 
 
@@ -177,7 +177,7 @@ def _trial_row(trial):
         params.get("loss_weight_mse_axon", "nan"),
         ua.get("f1_fibre", "nan"),
         ua.get("f1_axon", "nan"),
-        ua.get("f1_inner_tongue", "nan"),
+        ua.get("f1_inner_cylinder", "nan"),
     ]
 
 
