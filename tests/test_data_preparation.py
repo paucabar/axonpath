@@ -151,3 +151,39 @@ def test_annotation_qc_clean_image():
 
     issues = _annotation_qc(filled_label, mask_sem)
     assert issues == [], f"Expected no QC issues for clean image, got {issues}"
+
+
+# ---------------------------------------------------------------------------
+# 5. Annotation QC: edge-touching fibres without axon are not flagged
+# ---------------------------------------------------------------------------
+
+def test_annotation_qc_edge_fibre_not_flagged():
+    """Edge-touching fibres with no axon must not produce a fibre_without_axon warning.
+
+    Fibres cut by the image border are partially annotated by design — the annotator
+    cannot label structure outside the image, so missing axon is expected.
+    """
+    from axonpath.data_preparation.data_preparation import _annotation_qc
+
+    H, W = 64, 64
+    filled_label = np.zeros((H, W), dtype=np.int32)
+    filled_label[0:20, 10:30] = 1   # fibre 1 — touches top edge, no axon
+    filled_label[25:45, 25:45] = 2  # fibre 2 — interior, no axon (should warn)
+
+    mask_sem = np.zeros((H, W), dtype=np.uint8)
+    mask_sem[0:20, 10:30] = 1   # fibre semantic for fibre 1
+    mask_sem[25:45, 25:45] = 1  # fibre semantic for fibre 2
+
+    issues = _annotation_qc(filled_label, mask_sem)
+    issue_types = [t for t, _, _ in issues]
+
+    # Interior fibre 2 (no axon) must still be caught
+    assert "fibre_without_axon" in issue_types, (
+        f"Expected fibre_without_axon for interior fibre, got {issue_types}"
+    )
+
+    # Edge fibre 1 must NOT inflate the count
+    no_axon_counts = [count for t, count, _ in issues if t == "fibre_without_axon"]
+    assert no_axon_counts == [1], (
+        f"Expected exactly 1 fibre_without_axon (interior only), got counts {no_axon_counts}"
+    )

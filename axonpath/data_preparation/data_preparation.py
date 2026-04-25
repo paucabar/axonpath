@@ -6,9 +6,9 @@ from glob import glob
 import random
 import numpy as np
 import csv
-from skimage.measure import label
+from skimage.measure import label, regionprops
 from skimage.segmentation import clear_border
-from axonpath.utils.image_processing import fill_labels
+from axonpath.utils.image_processing import fill_labels, get_edge_touching_labels
 from axonpath.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
 _MANIFEST_FILE = "manifest.json"
@@ -157,23 +157,35 @@ def _annotation_qc(filled_label, mask_sem):
     Checks performed:
     - orphaned_inner_cylinder: mask_sem==2 pixels not inside any fibre label
     - orphaned_axon: mask_sem==3 pixels not inside any fibre label
-    - fibre_without_axon: fibre instances with no axon pixels anywhere inside them
+    - fibre_without_axon: interior fibre instances with no axon pixels anywhere
+      inside them (edge-touching fibres are excluded — partial annotation at image
+      borders is expected and not a labelling error)
     """
     issues = []
 
-    orphaned_ic = (mask_sem == 2) & (filled_label == 0)
+    orphaned_ic = ((mask_sem == 2) | (mask_sem == 3)) & (filled_label == 0)
     if orphaned_ic.any():
-        n = int(orphaned_ic.sum())
-        issues.append(("orphaned_inner_cylinder", n, f"{n} px outside fibre"))
+        props = regionprops(label(orphaned_ic))
+        detail = "; ".join(
+            f"ID={p.label} px={p.area} centroid=({int(p.centroid[0])},{int(p.centroid[1])})"
+            for p in props
+        )
+        issues.append(("orphaned_inner_cylinder", len(props), detail))
 
     orphaned_axon = (mask_sem == 3) & (filled_label == 0)
     if orphaned_axon.any():
-        n = int(orphaned_axon.sum())
-        issues.append(("orphaned_axon", n, f"{n} px outside fibre"))
+        props = regionprops(label(orphaned_axon))
+        detail = "; ".join(
+            f"ID={p.label} px={p.area} centroid=({int(p.centroid[0])},{int(p.centroid[1])})"
+            for p in props
+        )
+        issues.append(("orphaned_axon", len(props), detail))
 
     fibre_ids = np.unique(filled_label)
     fibre_ids = fibre_ids[fibre_ids != 0]
-    no_axon = [int(fid) for fid in fibre_ids if not np.any((filled_label == fid) & (mask_sem == 3))]
+    edge_ids = get_edge_touching_labels(filled_label)
+    interior_ids = fibre_ids[~np.isin(fibre_ids, list(edge_ids))]
+    no_axon = [int(fid) for fid in interior_ids if not np.any((filled_label == fid) & (mask_sem == 3))]
     if no_axon:
         ids_str = str(no_axon[:10]) + ("..." if len(no_axon) > 10 else "")
         issues.append(("fibre_without_axon", len(no_axon), f"fibre IDs: {ids_str}"))
