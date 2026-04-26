@@ -104,7 +104,7 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     pred_inner_cylinder = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32), connectivity=2)
     pred_inner_cylinder = fill_labels(pred_inner_cylinder)
     pred_inner_cylinder = label(
-        remove_small_objects(pred_inner_cylinder > 0, min_size=max(1, min_area), connectivity=2),
+        remove_small_objects(pred_inner_cylinder > 0, max_size=max(0, min_area - 1), connectivity=2),
         connectivity=2
     )
     pred_inner_cylinder = map_axon_labels_to_fibres(pred_fibre, pred_inner_cylinder)
