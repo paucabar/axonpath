@@ -193,7 +193,8 @@ def _annotation_qc(filled_label, mask_sem):
     return issues
 
 
-def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=True, seed=None):
+def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=True, seed=None,
+                  allowed_datasets=None):
     os.makedirs(out_root, exist_ok=True)
 
     # Guard: abort if tiles exist without a manifest (pre-manifest prepared data)
@@ -215,6 +216,8 @@ def split_dataset(in_root, out_root, fix_label_padding=True, create_test_split=T
     for dataset in os.listdir(in_root):
         dataset_path = os.path.join(in_root, dataset)
         if not os.path.isdir(dataset_path):
+            continue
+        if allowed_datasets is not None and dataset not in allowed_datasets:
             continue
 
         dataset_key = os.path.realpath(dataset_path)
