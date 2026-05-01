@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "axonpath"
+version = "0.1.0"
+description = "Deep learning segmentation and morphometric analysis for axon/myelin microscopy"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.0",
+    "numpy>=2.0",
+    "scipy",
+    "scikit-image",
+    "pandas>=2.0",
+    "matplotlib",
+    "tqdm",
+    "colorcet",
+    "monai>=1.5",
+    "edt>=3.0",
+    "bioimageio-spec>=0.5",
+    "Pillow",
+]
+
+[project.optional-dependencies]
+hpo = ["optuna>=3.0"]
+dev = ["pytest", "optuna>=3.0"]
+
+[tool.setuptools.packages.find]
+include = ["axonpath*"]
+
+[tool.setuptools.package-data]
+axonpath = ["weights/*.pth"]
