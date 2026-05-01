@@ -8,12 +8,12 @@ from skimage.io import imread
 from skimage.morphology import remove_small_objects
 from monai.inferers import sliding_window_inference
 from axonpath.utils.model_building import model_fn
-from axonpath.utils.image_processing import (
-    normalize,
-    segment_instances_from_sdt,
+from axonpath.utils.image_processing import normalize
+from axonpath.inference.post_processing import (
     apply_semantic_segmentation_head,
-    map_axon_labels_to_fibres,
+    segment_instances_from_sdt,
 )
+from axonpath.utils.label_ops import map_axon_labels_to_fibres
 
 
 def load_image(img_path: str) -> np.ndarray:

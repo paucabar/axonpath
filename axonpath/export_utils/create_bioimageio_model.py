@@ -7,7 +7,9 @@ from scipy.ndimage import binary_fill_holes
 
 from axonpath.inference.inference import load_model
 from axonpath.pipeline import Pipeline
-from axonpath.utils.image_processing import normalize, segment_instances_from_sdt, map_axon_labels_to_fibres
+from axonpath.utils.image_processing import normalize
+from axonpath.inference.post_processing import segment_instances_from_sdt
+from axonpath.utils.label_ops import map_axon_labels_to_fibres
 from axonpath.export_utils.config import BioimageioExportConfig
 from axonpath.utils.visualization import get_glasbey_cmap
 

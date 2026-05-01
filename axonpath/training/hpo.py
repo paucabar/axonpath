@@ -34,7 +34,7 @@ from axonpath.training.config import TrainingConfig
 from axonpath.transforms.custom_transforms import transforms_fn
 from axonpath.utils.model_building import model_fn, get_loaders
 from axonpath.training.train_loop import train_loop
-from axonpath.utils.evaluation_helpers import evaluate
+from axonpath.evaluation.helpers import evaluate
 from axonpath.dataset.axonpath_dataset import AxonPathDataset
 
 

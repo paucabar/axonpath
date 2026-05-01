@@ -67,7 +67,7 @@ def test_semantic_valid_mask_constrains_instances():
     This directly tests the key behavioral change in run_inference: watershed is
     now restricted to the semantic prediction mask, matching the extension pipeline.
     """
-    from axonpath.utils.image_processing import segment_instances_from_sdt
+    from axonpath.inference.post_processing import segment_instances_from_sdt
 
     H, W = 64, 64
     # Two SDT blobs: top-left and bottom-right, both with strong positive interior

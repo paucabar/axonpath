@@ -1,16 +1,16 @@
-﻿import torch
+import torch
 import torch.nn as nn
 import numpy as np
 from skimage.measure import label
 from skimage.morphology import remove_small_objects
 from monai.metrics import DiceMetric
 from axonpath.utils.visualization import show_images
-from axonpath.utils.image_processing import (
+from axonpath.inference.post_processing import (
     apply_semantic_segmentation_head,
     segment_instances_from_sdt,
-    fill_labels,
-    map_axon_labels_to_fibres,
 )
+from axonpath.utils.image_processing import fill_labels
+from axonpath.utils.label_ops import map_axon_labels_to_fibres
 from axonpath.evaluation.segmentation_evaluator import SegmentationEvaluator
 from axonpath.utils.losses import compute_loss
 
