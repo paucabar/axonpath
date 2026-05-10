@@ -28,6 +28,11 @@ def main():
     parser.add_argument("--output_dir", type=str, default=TrainingConfig.output_dir, help="Directory for all training outputs")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
     parser.add_argument("--no_lr_scheduler", action="store_true", help="Disable ReduceLROnPlateau learning rate scheduler")
+    parser.add_argument("--mse_fibre_weight", type=float, default=1.0, help="Loss weight for fibre SDT MSE term")
+    parser.add_argument("--mse_axon_weight", type=float, default=1.0, help="Loss weight for axon SDT MSE term")
+    parser.add_argument("--early_stopping_patience", type=int, default=TrainingConfig.early_stopping_patience, help="Early stopping patience in epochs (0 = disabled)")
+    parser.add_argument("--early_stopping_min_delta", type=float, default=TrainingConfig.early_stopping_min_delta, help="Minimum F1 improvement to reset early stopping counter")
+    parser.add_argument("--lr_scheduler_patience", type=int, default=TrainingConfig.lr_scheduler_patience, help="Patience for ReduceLROnPlateau scheduler (epochs)")
 
     args = parser.parse_args()
 
@@ -52,6 +57,10 @@ def main():
         output_dir=args.output_dir,
         seed=args.seed,
         use_lr_scheduler=not args.no_lr_scheduler,
+        loss_weights=(1.0, args.mse_fibre_weight, args.mse_axon_weight),
+        early_stopping_patience=args.early_stopping_patience,
+        early_stopping_min_delta=args.early_stopping_min_delta,
+        lr_scheduler_patience=args.lr_scheduler_patience,
     )
 
     # Train

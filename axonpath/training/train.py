@@ -97,7 +97,7 @@ def train(config: TrainingConfig):
 
     scheduler = None
     if config.use_lr_scheduler:
-        scheduler = ReduceLROnPlateau(optimizer, factor=0.5, patience=50, min_lr=1e-6)
+        scheduler = ReduceLROnPlateau(optimizer, factor=0.5, patience=config.lr_scheduler_patience, min_lr=1e-6)
 
     train_loss, val_loss = [], []
     f1_fibre, f1_axon, f1_inner_cylinder = [], [], []
