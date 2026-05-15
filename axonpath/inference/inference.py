@@ -97,7 +97,7 @@ def run_inference(
     axon_threshold: float = 0.5,
     min_diameter: float = 30.0,
     sw_batch_size: int = 1,
-    overlap: float = 0.5,
+    overlap: float = 0.75,
     predict_inner_cylinder: bool = True,
 ) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray]:
     """
@@ -164,8 +164,10 @@ def run_inference(
     dt_fibre = prediction[3]
     dt_axon = prediction[4]
 
-    # Fibre instance segmentation — restrict watershed to semantic fibre mask
-    fibre_valid = (semantic == 1)
+    # Fibre instance segmentation — restrict watershed to fibre + inner cylinder mask.
+    # semantic >= 1 includes both myelin (class 1) and inner cylinder (class 2) so
+    # the watershed expands across the full fibre disk, not just the myelin ring.
+    fibre_valid = (semantic >= 1)
     labels_fibre = segment_instances_from_sdt(
         distancemap=dt_fibre,
         threshold=fibre_threshold,
@@ -178,13 +180,14 @@ def run_inference(
     if not predict_inner_cylinder:
         return labels_fibre, None, semantic
 
-    # Axon instance segmentation — restrict watershed to semantic inner_cylinder mask
-    axon_valid = (semantic >= 2)
+    # Axon instance segmentation — no explicit valid_mask: segment_instances_from_sdt
+    # defaults to distancemap >= 0, which correctly restricts watershed to pixels where
+    # the model predicts positive axon SDT (inside the axon). Using semantic >= 2 instead
+    # would flood the full inner cylinder, not the axon itself.
     labels_axon = segment_instances_from_sdt(
         distancemap=dt_axon,
         threshold=axon_threshold,
         min_diameter=min_axon_diameter,
-        valid_mask=axon_valid,
     )
     min_axon_area = int(np.pi * (min_axon_diameter / 2) ** 2)
     labels_axon = remove_small_objects(labels_axon, max_size=max(0, min_axon_area - 1))
