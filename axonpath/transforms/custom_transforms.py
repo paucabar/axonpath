@@ -427,7 +427,7 @@ def transforms_fn(img_height, img_width):
     Validation uses a deterministic centre crop only.
     """
     train_transform = Compose([
-        RandomScale(scale_range=(0.7, 1.4), p=0.5, fill_values=_MASK_FILL),
+        RandomScale(scale_range=(0.7, 1.6), p=0.5, fill_values=_MASK_FILL),
         Rotate(limit=180, p=0.5, fill_values=_MASK_FILL),
         ElasticDeformation(alpha=34, sigma=6, p=0.25, fill_values=_MASK_FILL),
         RandomCrop(height=img_height, width=img_width),

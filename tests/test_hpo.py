@@ -137,6 +137,7 @@ def test_norm_type_follows_batch_size():
         "batch_size": [2, 4, 8],
         "loss_weight_mse_fibre": [1.0],
         "loss_weight_mse_axon": [1.0],
+        "ce_weight_ic": [1.0],
     })
     study = optuna.create_study(direction="maximize", sampler=sampler)
 

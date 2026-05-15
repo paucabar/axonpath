@@ -32,5 +32,6 @@ class TrainingConfig:
     use_lr_scheduler: bool = True   # ReduceLROnPlateau on val_loss (factor=0.5, patience=50)
     lr_scheduler_patience: int = 50
     loss_weights: tuple = (1.0, 1.0, 1.0)  # weights for (CE, MSE_fibre, MSE_axon) loss terms
+    ce_weight_ic: float = 1.0              # CE class weight for inner_cylinder (class 2); bg and myelin fixed at 1.0
     early_stopping_patience: int = 0        # 0 = disabled; stop if balanced F1 does not improve
     early_stopping_min_delta: float = 0.001 # minimum improvement to reset the patience counter

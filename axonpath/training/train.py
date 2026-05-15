@@ -15,6 +15,7 @@ from axonpath.utils import (
     model_fn, get_datasets, get_loaders, load_checkpoint, save_checkpoint,
     evaluate, loss_plot_fn, loss_plot_log_fn, plot_segmentation_scores_fn
 )
+from axonpath.utils.losses import make_dice_ce
 from axonpath.training.train_loop import train_loop
 from axonpath.training.config import TrainingConfig
 from axonpath.export_utils.model_export import export_torchscript_model
@@ -90,7 +91,8 @@ def train(config: TrainingConfig):
     model = model_fn(device, norm_type=norm_type)
 
     mse_loss = nn.MSELoss()
-    loss_fns = [mse_loss]
+    dice_ce = make_dice_ce(config.ce_weight_ic, device)
+    loss_fns = [mse_loss, dice_ce]
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     scaler = torch.amp.GradScaler(device)
 
