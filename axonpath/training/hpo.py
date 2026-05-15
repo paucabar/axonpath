@@ -104,9 +104,8 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
             random.seed(config.seed)
 
         model = model_fn(device, norm_type=norm_type)
-        ce_loss = nn.CrossEntropyLoss()
         mse_loss = nn.MSELoss()
-        loss_fns = [ce_loss, mse_loss]
+        loss_fns = [mse_loss]
         optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
         scaler = (torch.amp.GradScaler("cuda") if device == "cuda"
                   else torch.amp.GradScaler("cpu"))

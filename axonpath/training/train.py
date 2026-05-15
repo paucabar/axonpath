@@ -89,9 +89,8 @@ def train(config: TrainingConfig):
 
     model = model_fn(device, norm_type=norm_type)
 
-    ce_loss = nn.CrossEntropyLoss()
     mse_loss = nn.MSELoss()
-    loss_fns = [ce_loss, mse_loss]
+    loss_fns = [mse_loss]
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     scaler = torch.amp.GradScaler(device)
 
