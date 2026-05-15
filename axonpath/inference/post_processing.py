@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+from scipy.ndimage import gaussian_filter
 from skimage.segmentation import watershed, find_boundaries
 from skimage.measure import label
 from skimage.morphology import remove_small_objects
@@ -25,7 +26,8 @@ def segment_instances_from_sdt(
     min_diameter: float = 30.0,
     compactness: float = 0.5,
     valid_mask: np.ndarray = None,
-    seed_mask: np.ndarray = None
+    seed_mask: np.ndarray = None,
+    sdt_smooth_sigma: float = 1.5,
 ) -> np.ndarray:
     """
     Segment instance regions (e.g., fibres or axons) from a skeleton-aware distance transform.
@@ -37,6 +39,9 @@ def segment_instances_from_sdt(
         compactness (float): Compactness factor for the watershed algorithm.
         valid_mask (np.ndarray, optional): Optional binary mask specifying where to restrict watershed.
         seed_mask (np.ndarray, optional): Optional binary mask specifying seeds.
+        sdt_smooth_sigma (float): Sigma for Gaussian smoothing applied to the SDT before seed
+            extraction. Fills shallow SDT valleys caused by noisy predictions, preventing large
+            fibres from being split into multiple instances. Set to 0 to disable.
 
     Returns:
         np.ndarray: Postprocessed label image.
@@ -49,7 +54,6 @@ def segment_instances_from_sdt(
     else:
         raise ValueError(f"Unexpected distancemap shape: {distancemap.shape}")
 
-
     # Determine valid mask
     if valid_mask is None or not isinstance(valid_mask, np.ndarray):
         valid_mask = distancemap_np >= 0
@@ -61,9 +65,12 @@ def segment_instances_from_sdt(
     radius = 0.3 * min_diameter / 2
     min_area = int(np.pi * radius ** 2)
 
-    # Generate seed mask
+    # Generate seed mask — use smoothed SDT so shallow prediction valleys don't
+    # split a single large fibre into multiple seed blobs. The original (unsmoothed)
+    # map is kept for the watershed gradient to preserve sharp instance boundaries.
     if seed_mask is None or not isinstance(seed_mask, np.ndarray):
-        seed_mask = np.logical_and(distancemap_clipped >= threshold, valid_mask)
+        sdt_for_seeds = gaussian_filter(distancemap_clipped, sigma=sdt_smooth_sigma) if sdt_smooth_sigma > 0 else distancemap_clipped
+        seed_mask = np.logical_and(sdt_for_seeds >= threshold, valid_mask)
 
     # connectivity=2 (8-connected) matches the extension's implicit watershed behaviour
     # and avoids splitting diagonal seed blobs into multiple instances
