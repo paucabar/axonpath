@@ -33,6 +33,8 @@ def main():
     parser.add_argument("--early_stopping_patience", type=int, default=TrainingConfig.early_stopping_patience, help="Early stopping patience in epochs (0 = disabled)")
     parser.add_argument("--early_stopping_min_delta", type=float, default=TrainingConfig.early_stopping_min_delta, help="Minimum F1 improvement to reset early stopping counter")
     parser.add_argument("--lr_scheduler_patience", type=int, default=TrainingConfig.lr_scheduler_patience, help="Patience for ReduceLROnPlateau scheduler (epochs)")
+    parser.add_argument("--ce_weight_ic", type=float, default=TrainingConfig.ce_weight_ic,
+                        help="CE class weight for inner_cylinder (class 2); bg and myelin fixed at 1.0")
 
     args = parser.parse_args()
 
@@ -58,6 +60,7 @@ def main():
         seed=args.seed,
         use_lr_scheduler=not args.no_lr_scheduler,
         loss_weights=(1.0, args.mse_fibre_weight, args.mse_axon_weight),
+        ce_weight_ic=args.ce_weight_ic,
         early_stopping_patience=args.early_stopping_patience,
         early_stopping_min_delta=args.early_stopping_min_delta,
         lr_scheduler_patience=args.lr_scheduler_patience,
