@@ -24,9 +24,9 @@ class _WeightedDiceCE(nn.Module):
         return dice_loss + ce_loss
 
 
-def make_dice_ce(ce_weight_ic: float = 1.0, device: str = "cpu") -> _WeightedDiceCE:
-    """Create a DiceCE loss with optional per-class CE weight for inner_cylinder (class 2)."""
-    ce_weight = torch.tensor([1.0, 1.0, ce_weight_ic], device=device)
+def make_dice_ce(ce_weight_ic: float = 1.0, ce_weight_myelin: float = 1.0, device: str = "cpu") -> _WeightedDiceCE:
+    """Create a DiceCE loss with optional per-class CE weights for myelin (class 1) and inner_cylinder (class 2)."""
+    ce_weight = torch.tensor([1.0, ce_weight_myelin, ce_weight_ic], device=device)
     return _WeightedDiceCE(ce_weight)
 
 

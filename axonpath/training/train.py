@@ -91,7 +91,7 @@ def train(config: TrainingConfig):
     model = model_fn(device, norm_type=norm_type)
 
     mse_loss = nn.MSELoss()
-    dice_ce = make_dice_ce(config.ce_weight_ic, device)
+    dice_ce = make_dice_ce(config.ce_weight_ic, config.ce_weight_myelin, device)
     loss_fns = [mse_loss, dice_ce]
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     scaler = torch.amp.GradScaler(device)
