@@ -7,8 +7,10 @@ Search space
 ------------
 learning_rate         log-uniform [1e-5, 1e-2]
 batch_size            categorical {2, 4, 8}   (norm_type follows automatically)
-loss_weight_mse_fibre uniform     [0.5, 3.0]  (CE weight fixed at 1.0)
+loss_weight_mse_fibre uniform     [0.5, 3.0]
 loss_weight_mse_axon  uniform     [0.5, 3.0]
+ce_weight_ic          log-uniform [1.0, 4.0]
+ce_weight_myelin      log-uniform [1.0, 2.5]
 
 Intermediate value reported to the pruner: val_loss (each epoch).
 Trial objective (maximised): mean F1 across fibre / axon / inner_cylinder on val set.
@@ -33,8 +35,9 @@ except ImportError as e:
 from axonpath.training.config import TrainingConfig
 from axonpath.transforms.custom_transforms import transforms_fn
 from axonpath.utils.model_building import model_fn, get_loaders
+from axonpath.utils.losses import make_dice_ce
 from axonpath.training.train_loop import train_loop
-from axonpath.utils.evaluation_helpers import evaluate
+from axonpath.evaluation.helpers import evaluate
 from axonpath.dataset.axonpath_dataset import AxonPathDataset
 
 
@@ -51,6 +54,8 @@ def _build_config(trial, train_dir, val_dir, proxy_epochs, min_diameter,
         batch_size = trial.suggest_categorical("batch_size", [2, 4, 8])
     mse_fibre_w = trial.suggest_float("loss_weight_mse_fibre", 0.5, 3.0)
     mse_axon_w = trial.suggest_float("loss_weight_mse_axon", 0.5, 3.0)
+    ce_weight_ic = trial.suggest_float("ce_weight_ic", 1.0, 4.0, log=True)
+    ce_weight_myelin = trial.suggest_float("ce_weight_myelin", 1.0, 2.5, log=True)
 
     norm_type = "instance" if batch_size < 8 else "batch"
 
@@ -66,6 +71,8 @@ def _build_config(trial, train_dir, val_dir, proxy_epochs, min_diameter,
         val_dir=val_dir,
         use_lr_scheduler=False,
         loss_weights=(1.0, mse_fibre_w, mse_axon_w),
+        ce_weight_ic=ce_weight_ic,
+        ce_weight_myelin=ce_weight_myelin,
         output_dir=trial_output_dir,
     ), norm_type
 
@@ -94,6 +101,8 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
             "batch_size": config.batch_size,
             "loss_weight_mse_fibre": config.loss_weights[1],
             "loss_weight_mse_axon": config.loss_weights[2],
+            "ce_weight_ic": config.ce_weight_ic,
+            "ce_weight_myelin": config.ce_weight_myelin,
             "norm_type": norm_type,
             "use_lr_scheduler": config.use_lr_scheduler,
         }))
@@ -104,9 +113,9 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
             random.seed(config.seed)
 
         model = model_fn(device, norm_type=norm_type)
-        ce_loss = nn.CrossEntropyLoss()
         mse_loss = nn.MSELoss()
-        loss_fns = [ce_loss, mse_loss]
+        dice_ce = make_dice_ce(config.ce_weight_ic, config.ce_weight_myelin, device)
+        loss_fns = [mse_loss, dice_ce]
         optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
         scaler = (torch.amp.GradScaler("cuda") if device == "cuda"
                   else torch.amp.GradScaler("cpu"))
@@ -160,6 +169,7 @@ def make_objective(train_dir, val_dir, proxy_epochs, min_diameter, device,
 _SUMMARY_COLUMNS = [
     "trial_id", "state", "objective_f1", "val_loss_final", "epochs_run",
     "learning_rate", "batch_size", "loss_weight_mse_fibre", "loss_weight_mse_axon",
+    "ce_weight_ic", "ce_weight_myelin",
     "f1_fibre", "f1_axon", "f1_inner_cylinder",
 ]
 
@@ -178,6 +188,8 @@ def _trial_row(trial):
         params.get("batch_size", "nan"),
         params.get("loss_weight_mse_fibre", "nan"),
         params.get("loss_weight_mse_axon", "nan"),
+        params.get("ce_weight_ic", "nan"),
+        params.get("ce_weight_myelin", "nan"),
         ua.get("f1_fibre", "nan"),
         ua.get("f1_axon", "nan"),
         ua.get("f1_inner_cylinder", "nan"),
@@ -218,6 +230,8 @@ def _write_best_config(study, output_dir, proxy_epochs, min_diameter, device,
         batch_size=batch_size,
         loss_weights=(1.0, best.params["loss_weight_mse_fibre"],
                       best.params["loss_weight_mse_axon"]),
+        ce_weight_ic=best.params["ce_weight_ic"],
+        ce_weight_myelin=best.params["ce_weight_myelin"],
         min_diameter=min_diameter,
         device=device,
         image_height=image_height,

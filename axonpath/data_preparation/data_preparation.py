@@ -8,7 +8,8 @@ import numpy as np
 import csv
 from skimage.measure import label, regionprops
 from skimage.segmentation import clear_border
-from axonpath.utils.image_processing import fill_labels, get_edge_touching_labels
+from axonpath.utils.image_processing import fill_labels
+from axonpath.utils.label_ops import get_edge_touching_labels
 from axonpath.skeleton.skeleton_aware_distance_transform import LabelDistanceTransforms
 
 _MANIFEST_FILE = "manifest.json"

@@ -1,16 +1,16 @@
-﻿import torch
+import torch
 import torch.nn as nn
 import numpy as np
 from skimage.measure import label
 from skimage.morphology import remove_small_objects
 from monai.metrics import DiceMetric
 from axonpath.utils.visualization import show_images
-from axonpath.utils.image_processing import (
+from axonpath.inference.post_processing import (
     apply_semantic_segmentation_head,
     segment_instances_from_sdt,
-    fill_labels,
-    map_axon_labels_to_fibres,
 )
+from axonpath.utils.image_processing import fill_labels
+from axonpath.utils.label_ops import map_axon_labels_to_fibres
 from axonpath.evaluation.segmentation_evaluator import SegmentationEvaluator
 from axonpath.utils.losses import compute_loss
 
@@ -89,19 +89,30 @@ def evaluate(
 
 
 def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min_diameter, axon_min_diameter, index):
-    # Predict instances
-    pred_fibre = segment_instances_from_sdt(pred[3].unsqueeze(0), fibre_threshold, min_diameter)
-    pred_axon = segment_instances_from_sdt(pred[4].unsqueeze(0), axon_threshold, axon_min_diameter)
-
+    # Semantic map first — needed as valid_mask for fibre watershed
     pred_sem = apply_semantic_segmentation_head(pred[0:3].unsqueeze(0))
+    sem_np = pred_sem.cpu().numpy().squeeze()
 
-    # Inner Cylinder postprocessing aligned with test eval and extension:
-    # fill holes → remove small objects → map to fibres
+    # Fibre: restrict watershed to semantic fibre+IC mask; discard sub-threshold instances.
+    # Mirrors run_inference: valid_mask=semantic>=1, then remove_small_objects.
+    min_fibre_area = int(np.pi * (min_diameter / 2) ** 2)
+    fibre_valid = sem_np >= 1
+    pred_fibre = segment_instances_from_sdt(pred[3].unsqueeze(0), fibre_threshold, min_diameter, valid_mask=fibre_valid)
+    pred_fibre = remove_small_objects(pred_fibre, max_size=max(0, min_fibre_area - 1))
+
+    # Axon: no valid_mask (SDT >= 0 correctly restricts to axon pixels); remove small
+    # objects; map to fibres. Mirrors run_inference exactly.
+    min_axon_area = int(np.pi * (axon_min_diameter / 2) ** 2)
+    pred_axon = segment_instances_from_sdt(pred[4].unsqueeze(0), axon_threshold, axon_min_diameter)
+    pred_axon = remove_small_objects(pred_axon, max_size=max(0, min_axon_area - 1))
+    pred_axon = map_axon_labels_to_fibres(pred_fibre, pred_axon)
+
+    # Inner Cylinder: semantic class 2 → fill holes → remove small → map to fibres
     min_diameter_inner_cylinder = min_diameter / 2
     radius = min_diameter_inner_cylinder / 2
     min_area = int(np.pi * radius ** 2)
 
-    pred_inner_cylinder = label((pred_sem.cpu().numpy().squeeze() == 2).astype(np.int32), connectivity=2)
+    pred_inner_cylinder = label((sem_np == 2).astype(np.int32), connectivity=2)
     pred_inner_cylinder = fill_labels(pred_inner_cylinder)
     pred_inner_cylinder = label(
         remove_small_objects(pred_inner_cylinder > 0, max_size=max(0, min_area - 1), connectivity=2),

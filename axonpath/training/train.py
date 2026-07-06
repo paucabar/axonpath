@@ -15,6 +15,7 @@ from axonpath.utils import (
     model_fn, get_datasets, get_loaders, load_checkpoint, save_checkpoint,
     evaluate, loss_plot_fn, loss_plot_log_fn, plot_segmentation_scores_fn
 )
+from axonpath.utils.losses import make_dice_ce
 from axonpath.training.train_loop import train_loop
 from axonpath.training.config import TrainingConfig
 from axonpath.export_utils.model_export import export_torchscript_model
@@ -89,15 +90,15 @@ def train(config: TrainingConfig):
 
     model = model_fn(device, norm_type=norm_type)
 
-    ce_loss = nn.CrossEntropyLoss()
     mse_loss = nn.MSELoss()
-    loss_fns = [ce_loss, mse_loss]
+    dice_ce = make_dice_ce(config.ce_weight_ic, config.ce_weight_myelin, device)
+    loss_fns = [mse_loss, dice_ce]
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     scaler = torch.amp.GradScaler(device)
 
     scheduler = None
     if config.use_lr_scheduler:
-        scheduler = ReduceLROnPlateau(optimizer, factor=0.5, patience=50, min_lr=1e-6)
+        scheduler = ReduceLROnPlateau(optimizer, factor=0.5, patience=config.lr_scheduler_patience, min_lr=1e-6)
 
     train_loss, val_loss = [], []
     f1_fibre, f1_axon, f1_inner_cylinder = [], [], []

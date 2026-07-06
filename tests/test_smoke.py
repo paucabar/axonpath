@@ -151,7 +151,7 @@ def test_training_config_early_stopping_fields():
 
 def test_instance_segmentation_returns_integer_labels():
     """segment_instances_from_sdt must return a non-trivial integer label map."""
-    from axonpath.utils.image_processing import segment_instances_from_sdt
+    from axonpath.inference.post_processing import segment_instances_from_sdt
 
     # Build a synthetic SDT: two blobs with positive interior, -1 elsewhere
     sdt = np.full((64, 64), -1.0, dtype=np.float32)
