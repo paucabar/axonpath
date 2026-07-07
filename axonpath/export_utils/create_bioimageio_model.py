@@ -1,4 +1,5 @@
 ﻿import os
+import zipfile
 import numpy as np
 import torch
 from PIL import Image
@@ -264,6 +265,14 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
     zip_path = Path(config_bioimageio.output_dir) / f"{config_bioimageio.model_name}-{config_bioimageio.model_version}.zip"
     package_path = save_bioimageio_package(model_descr, output_path=zip_path)
     print("Saved model package:", package_path)
+
+    # save_bioimageio_package only writes rdf.yaml inside the zip. QuPath's AxonPath
+    # extension picks models by scanning a directory for weights.pt + rdf.yaml sitting
+    # loose side by side, so extract rdf.yaml out of the package we just wrote to
+    # guarantee it's byte-identical to what's actually inside the zip.
+    with zipfile.ZipFile(package_path) as zf:
+        zf.extract("rdf.yaml", config_bioimageio.output_dir)
+    print("Extracted rdf.yaml to:", os.path.join(config_bioimageio.output_dir, "rdf.yaml"))
 
     # Validate model
     if config_bioimageio.validate:
