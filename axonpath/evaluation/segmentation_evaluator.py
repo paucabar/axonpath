@@ -58,6 +58,45 @@ class SegmentationEvaluator:
 
         return intersection / union
 
+    def matches_at_threshold(self, threshold: float = 0.5) -> Tuple[dict, set, set]:
+        """
+        Greedy one-to-one matching between GT and predicted objects at a given IoU threshold.
+
+        Args:
+            threshold (float): IoU threshold for matching.
+
+        Returns:
+            Tuple:
+                matches (dict): {gt_label: pred_label} for matched pairs (1-indexed label IDs).
+                unmatched_gt (set): GT label IDs with no accepted match (FN).
+                unmatched_pred (set): Predicted label IDs with no accepted match (FP).
+        """
+        n_gt, n_pred = self.iou_matrix.shape
+        all_gt = set(range(1, n_gt + 1))
+        all_pred = set(range(1, n_pred + 1))
+
+        if n_gt == 0 or n_pred == 0:
+            return {}, all_gt, all_pred
+
+        matched_gt_idx = set()
+        matched_pred_idx = set()
+        matches = {}
+
+        gt_indices, pred_indices = np.where(self.iou_matrix > threshold)
+        if len(gt_indices) > 0:
+            iou_values = self.iou_matrix[gt_indices, pred_indices]
+            sort_order = np.argsort(-iou_values)
+            for gi, pi in zip(gt_indices[sort_order], pred_indices[sort_order]):
+                if gi not in matched_gt_idx and pi not in matched_pred_idx:
+                    matched_gt_idx.add(gi)
+                    matched_pred_idx.add(pi)
+                    matches[gi + 1] = pi + 1  # back to 1-indexed label IDs
+
+        unmatched_gt = all_gt - {gi + 1 for gi in matched_gt_idx}
+        unmatched_pred = all_pred - {pi + 1 for pi in matched_pred_idx}
+
+        return matches, unmatched_gt, unmatched_pred
+
     def _evaluate_at_threshold(self, threshold: float) -> Tuple[float, float, float, int, int, int]:
         """
         Computes evaluation metrics at a given IoU threshold using greedy one-to-one matching.
@@ -74,32 +113,11 @@ class SegmentationEvaluator:
         if n_gt == 0 and n_pred == 0:
             return 1.0, 1.0, 1.0, 0, 0, 0
 
-        if n_gt == 0 or n_pred == 0:
-            TP = 0
-            FP = n_pred
-            FN = n_gt
-            f1 = 2 * TP / (2 * TP + FP + FN + 1e-9)
-            precision = TP / (TP + FP + 1e-9)
-            recall = TP / (TP + FN + 1e-9)
-            return f1, precision, recall, TP, FP, FN
+        matches, unmatched_gt, unmatched_pred = self.matches_at_threshold(threshold)
 
-        # Greedy one-to-one matching: sort candidate pairs by IoU descending,
-        # assign each GT and each prediction at most once
-        matched_gt = set()
-        matched_pred = set()
-
-        gt_indices, pred_indices = np.where(self.iou_matrix > threshold)
-        if len(gt_indices) > 0:
-            iou_values = self.iou_matrix[gt_indices, pred_indices]
-            sort_order = np.argsort(-iou_values)
-            for gi, pi in zip(gt_indices[sort_order], pred_indices[sort_order]):
-                if gi not in matched_gt and pi not in matched_pred:
-                    matched_gt.add(gi)
-                    matched_pred.add(pi)
-
-        TP = len(matched_gt)
-        FP = n_pred - len(matched_pred)
-        FN = n_gt - len(matched_gt)
+        TP = len(matches)
+        FP = len(unmatched_pred)
+        FN = len(unmatched_gt)
 
         precision = TP / (TP + FP + 1e-9)
         recall = TP / (TP + FN + 1e-9)
