@@ -60,9 +60,22 @@ def border_distance(label_img: np.ndarray, label_id: int, bbox: tuple, pad: int 
             return np.nan
 
 
-def local_confluence(label_img: np.ndarray, centroid: tuple, window_size_px: int) -> float:
+def local_confluence(label_img: np.ndarray, own_label: int, centroid: tuple, window_size_px: int) -> float:
     """
-    Local confluence: fraction of the square window around `centroid` covered by any fibre.
+    Local confluence: fraction of the *non-self* area of the square window around
+    `centroid` that is covered by *other* fibres. `own_label`'s own pixels are
+    excluded from both the numerator and the denominator, so this measures
+    surrounding packing density independently of the fibre's own size.
+
+    (Earlier version counted the fibre's own pixels toward the numerator over a
+    fixed denominator, which meant confluence was dominated by the fibre's own
+    size rather than genuine neighbour density whenever the fibre was a large
+    fraction of the window — verified against real data: corr(diameter,
+    confluence) = 0.72, median self-fill-fraction ~47% of the (former) 128px
+    window before counting any neighbours at all. Fixed together with widening
+    window_size_px's default (see metrics_table) — excluding self alone isn't
+    enough if the window is barely bigger than the fibre, since the "non-self"
+    denominator would shrink toward zero for the largest fibres.)
 
     Normalised to the actual (clipped) window area, so edge fibres are not penalised
     for having a smaller observable window.
@@ -71,6 +84,9 @@ def local_confluence(label_img: np.ndarray, centroid: tuple, window_size_px: int
     ----------
     label_img : np.ndarray
         Label image of fibres.
+    own_label : int
+        Label ID of the fibre this confluence value is being computed for —
+        excluded from both numerator and denominator.
     centroid : tuple
         (row, col) centroid of the fibre (from regionprops.centroid).
     window_size_px : int
@@ -79,7 +95,8 @@ def local_confluence(label_img: np.ndarray, centroid: tuple, window_size_px: int
     Returns
     -------
     float
-        Fraction of observed pixels occupied by any fibre label (0–1).
+        Fraction of non-self observed pixels occupied by another fibre label (0–1),
+        or NaN if the window is entirely (or almost entirely) the fibre itself.
     """
     H, W = label_img.shape
     cy, cx = int(np.round(centroid[0])), int(np.round(centroid[1]))
@@ -91,8 +108,12 @@ def local_confluence(label_img: np.ndarray, centroid: tuple, window_size_px: int
     c_max = min(cx - half + window_size_px, W)
     window = label_img[r_min:r_max, c_min:c_max]
 
-    total = window.size
-    return float(np.sum(window > 0) / total) if total > 0 else np.nan
+    self_mask = window == own_label
+    non_self_total = window.size - int(self_mask.sum())
+    if non_self_total <= 0:
+        return np.nan
+    other_count = int(np.sum((window > 0) & ~self_mask))
+    return float(other_count / non_self_total)
 
 
 def _centroid_min_distances(props: list) -> dict:
@@ -113,7 +134,7 @@ def metrics_table(
     inner_cylinder_labels: np.ndarray,
     pixel_size_um: Optional[float] = None,
     axon_labels: Optional[np.ndarray] = None,
-    window_size_px: int = 128,
+    window_size_px: int = 512,
 ) -> pd.DataFrame:
     """
     Compute morphometric and spatial measurements for labelled fibres.
@@ -195,7 +216,7 @@ def metrics_table(
             "Fibre Eccentricity": getattr(region, "eccentricity", np.nan),
             f"Min Border Distance {len_sfx}": (min_border_px * px_len if not np.isnan(min_border_px) else np.nan),
             f"Min Centroid Distance {len_sfx}": (min_centroid_px * px_len if not np.isnan(min_centroid_px) else np.nan),
-            "Local Confluence": local_confluence(fibre_labels, region.centroid, window_size_px),
+            "Local Confluence": local_confluence(fibre_labels, lbl, region.centroid, window_size_px),
         })
 
     return pd.DataFrame(results)
@@ -208,7 +229,7 @@ def single_metric(
     pixel_size_um: Optional[float] = None,
     label_id: Optional[int] = None,
     axon_labels: Optional[np.ndarray] = None,
-    window_size_px: int = 128,
+    window_size_px: int = 512,
 ):
     """
     Compute one specific metric, either for a given label or all labels.

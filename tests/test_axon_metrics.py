@@ -218,21 +218,45 @@ def test_border_distance_no_neighbor():
 # ---------------------------------------------------------------------------
 
 def test_local_confluence_full():
-    """All pixels are fibre → confluence = 1."""
-    img = np.ones((64, 64), dtype=np.int32)
-    assert local_confluence(img, (32, 32), window_size_px=20) == pytest.approx(1.0)
+    """Self excluded from both num/denom; every non-self pixel in the window
+    belongs to another fibre → confluence = 1."""
+    img = np.full((64, 64), 2, dtype=np.int32)  # everything is a neighbouring fibre
+    img[30:35, 30:35] = 1                        # small "self" region
+    conf = local_confluence(img, own_label=1, centroid=(32, 32), window_size_px=20)
+    assert conf == pytest.approx(1.0)
 
 
-def test_local_confluence_single_pixel():
-    """One fibre pixel in a 10×10 window → confluence = 1/100."""
+def test_local_confluence_isolated_self():
+    """Self alone in an otherwise-empty window, no neighbours → confluence = 0."""
     img = np.zeros((64, 64), dtype=np.int32)
-    img[32, 32] = 1
-    assert local_confluence(img, (32, 32), window_size_px=10) == pytest.approx(1 / 100)
+    img[32, 32] = 1  # subject's own single pixel, nothing else nearby
+    conf = local_confluence(img, own_label=1, centroid=(32, 32), window_size_px=10)
+    assert conf == pytest.approx(0.0)
+
+
+def test_local_confluence_single_neighbor():
+    """One neighbouring fibre pixel next to an isolated self pixel, in a 10x10
+    window (100 px, 1 self px excluded) → confluence = 1/99."""
+    img = np.zeros((64, 64), dtype=np.int32)
+    img[32, 32] = 1  # self
+    img[33, 33] = 2  # one neighbouring fibre pixel
+    conf = local_confluence(img, own_label=1, centroid=(32, 32), window_size_px=10)
+    assert conf == pytest.approx(1 / 99)
 
 
 def test_local_confluence_clipped_window():
-    """Window at image corner is clipped; normalised to actual (smaller) window size."""
+    """Window at image corner is clipped; normalised to the actual (smaller)
+    non-self area, not the nominal window size."""
+    img = np.full((64, 64), 2, dtype=np.int32)  # everything is a neighbouring fibre
+    img[0, 0] = 1  # self at the very corner
+    conf = local_confluence(img, own_label=1, centroid=(0, 0), window_size_px=10)
+    assert conf == pytest.approx(1.0)  # all non-self pixels in the clipped window are "other"
+
+
+def test_local_confluence_self_fills_window_returns_nan():
+    """Self fills the entire window (no non-self area at all) → NaN, not a
+    spurious 1.0 — this is the behaviour the exclude-self rewrite was for:
+    a fibre's own bulk should never inflate its own confluence value."""
     img = np.ones((64, 64), dtype=np.int32)
-    # Centroid at corner — window is clipped to (half+1)×(half+1) = 6×6 = 36 px
-    conf = local_confluence(img, (0, 0), window_size_px=10)
-    assert conf == pytest.approx(1.0)   # all pixels in clipped window are fibre
+    conf = local_confluence(img, own_label=1, centroid=(32, 32), window_size_px=20)
+    assert np.isnan(conf)
