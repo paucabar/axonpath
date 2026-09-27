@@ -10,8 +10,8 @@ For hands-on usage, refer to the [tutorial notebook](notebooks/AxonPath_Tutorial
 Clone the repository:
 
 ```
-git clone https://github.com/paucabar/aimseg-dl
-cd aimseg-dl
+git clone https://github.com/paucabar/axonpath
+cd axonpath
 ```
 
 Create the conda environment:

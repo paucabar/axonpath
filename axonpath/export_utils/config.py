@@ -20,3 +20,7 @@ class BioimageioExportConfig:
     author_names: List[str] = field(default_factory=lambda: ["Your Name"])  # Multiple authors supported
     license_id: str = "CC-BY-4.0"          # BioImage.IO License ID
     validate: bool = False                 # Run BioimageIO test
+    description: str = "AxonPath model for segmenting myelinated fibres and axons."  # One-line, model-specific description
+    git_repo: str = "https://github.com/paucabar/axonpath"                            # Training code repository
+    qupath_extension_url: str = "https://github.com/paucabar/qupath-extension-axonpath"  # Where to run the model
+    tags: List[str] = field(default_factory=list)  # BioImage.IO search tags
