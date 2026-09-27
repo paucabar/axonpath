@@ -12,9 +12,27 @@ def main():
     parser.add_argument("--model_version", type=str, default="0.1.0", help="Version of the model")
     parser.add_argument("--pixel_size", type=float, default=0.008, help="Pixel size in microns")
     parser.add_argument("--min_diameter", type=float, default=30.0, help="Expected minimum diameter")
-    parser.add_argument("--citation_text", type=str, default="Carrillo-Barberà et al., 2025", help="Citation text")
-    parser.add_argument("--citation_doi", type=str, default="10.1234/fake-doi-placeholder", help="Citation DOI")
+    parser.add_argument("--citation_text", type=str, default="Carrillo-Barberà et al.", help="Citation text")
+    parser.add_argument(
+        "--citation_doi",
+        type=str,
+        default=None,
+        help="Citation DOI (e.g. the Zenodo record). If omitted, the citation links to --git_repo instead",
+    )
     parser.add_argument("--license_id", type=str, default="CC-BY-4.0", help="License ID")
+    parser.add_argument(
+        "--description",
+        type=str,
+        default="AxonPath model for segmenting myelinated fibres and axons.",
+        help="One-line, model-specific description (imaging modality, tissue, pixel size)",
+    )
+    parser.add_argument(
+        "--git_repo",
+        type=str,
+        default="https://github.com/paucabar/axonpath",
+        help="Training code repository URL",
+    )
+    parser.add_argument("--tags", nargs="+", default=[], help="BioImage.IO search tags")
     parser.add_argument(
         "--author_names",
         nargs="+",
@@ -67,6 +85,9 @@ def main():
         author_names=args.author_names,
         license_id=args.license_id,
         validate=args.validate,
+        description=args.description,
+        git_repo=args.git_repo,
+        tags=args.tags,
     )
 
     export_bioimageio(config)

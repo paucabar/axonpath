@@ -52,41 +52,63 @@ def write_readme(config_bioimageio: BioimageioExportConfig) -> str:
     readme_filename = "README.md"
     readme_path = os.path.join(config_bioimageio.output_dir, readme_filename)
 
+    c = config_bioimageio
+    if c.predict_inner_cylinder:
+        hierarchy = "Fibre > InnerCylinder > Axon"
+        outputs = "myelinated fibres, inner cylinders (axon plus inner tongue) and axons"
+    else:
+        hierarchy = "Fibre > Axon"
+        outputs = "myelinated fibres and axons"
+
     with open(readme_path, "w", encoding="utf-8") as f:
-        # Title
-        f.write(f"# {config_bioimageio.model_name}-{config_bioimageio.model_version}\n\n")
+        f.write(f"# {c.model_name}-{c.model_version}\n\n")
+        f.write(f"{c.description}\n\n")
 
-        # Purpose
-        f.write("This model segments axons and fibres using the axonpath framework.\n\n")
+        f.write("## Model\n\n")
+        f.write(f"- **Segments:** {outputs}\n")
+        f.write(f"- **Input:** single channel (greyscale) at {c.model_pixel_size:g} µm/pixel\n")
+        f.write(f"- **Minimum object diameter:** {c.min_diameter:g} pixels at that pixel size\n")
+        f.write(f"- **Version:** {c.model_version}\n")
+        f.write(f"- **License:** {c.license_id}\n\n")
 
-        # Version & Licensing
-        f.write(f"**Version**: {config_bioimageio.model_version}\n\n")
-        f.write(f"**License**: {config_bioimageio.license_id}\n\n")
+        f.write("## Usage\n\n")
+        f.write(
+            f"This model is designed to be run with the [AxonPath extension for QuPath]({c.qupath_extension_url}), "
+            f"which rescales images to the model's pixel size and turns the predictions into a "
+            f"{hierarchy} object hierarchy with morphometric measurements.\n\n"
+        )
+        f.write(
+            "Unzip the model into its own folder inside a model directory, and select that directory "
+            "in the AxonPath panel in QuPath. See the extension's documentation for details.\n\n"
+        )
+        f.write(f"Training code: {c.git_repo}\n\n")
 
-        # Pixel size
-        f.write(f"**Pixel size**: {config_bioimageio.model_pixel_size:.3f} µm/pixel\n")
-        f.write(f"**Minimum object diameter**: {config_bioimageio.min_diameter} pixels\n\n")
+        f.write("## Citation\n\n")
+        f.write(f"{_citation_text(c)}\n\n")
+        if c.citation_doi:
+            f.write(f"DOI: [{c.citation_doi}](https://doi.org/{c.citation_doi})\n\n")
 
-        # Citation
-        if config_bioimageio.citation_text or config_bioimageio.citation_doi:
-            f.write("## Citation\n")
-            if config_bioimageio.citation_text:
-                f.write(f"{config_bioimageio.citation_text}\n\n")
-            if config_bioimageio.citation_doi:
-                f.write(f"DOI: [{config_bioimageio.citation_doi}](https://doi.org/{config_bioimageio.citation_doi})\n\n")
-
-        # Authors
-        if config_bioimageio.author_names:
-            f.write("## Authors\n")
-            for author in config_bioimageio.author_names:
+        if c.author_names:
+            f.write("## Authors\n\n")
+            for author in c.author_names:
                 f.write(f"- {author}\n")
-            f.write("\n")
-
-        # Usage note
-        f.write("## Usage\n")
-        f.write("Refer to the axonpath documentation for inference and post-processing instructions.\n")
 
     return readme_filename
+
+
+def _citation_text(config_bioimageio: BioimageioExportConfig) -> str:
+    return config_bioimageio.citation_text or "Carrillo-Barberà et al."
+
+
+def build_cite_entry(config_bioimageio: BioimageioExportConfig) -> CiteEntry:
+    """
+    Citation for the model: the DOI when one is given (e.g. the Zenodo record),
+    otherwise the training code repository. BioImage.IO requires either a DOI or a URL.
+    """
+    text = _citation_text(config_bioimageio)
+    if config_bioimageio.citation_doi:
+        return CiteEntry(text=text, doi=Doi(config_bioimageio.citation_doi))
+    return CiteEntry(text=text, url=HttpUrl(config_bioimageio.git_repo))
 
 
 def generate_and_save_custom_cover(
@@ -240,12 +262,13 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
     model_descr = ModelDescr(
         name=config_bioimageio.model_name,
         version=config_bioimageio.model_version,
-        description="axonpath TorchScript model for axon/fibre segmentation.",
+        description=config_bioimageio.description,
         authors=[Author(name=name) for name in config_bioimageio.author_names],
         license=LicenseId(config_bioimageio.license_id),
         documentation=RelativeFilePath(Path(os.path.relpath(os.path.join(config_bioimageio.output_dir, readme_filename)))),
         covers=[os.path.join(config_bioimageio.output_dir, "cover.png")],
-        git_repo=HttpUrl("https://github.com/paucabar/aimseg-dl"),
+        git_repo=HttpUrl(config_bioimageio.git_repo),
+        tags=config_bioimageio.tags,
         inputs=[input_descr],
         outputs=[output_descr],
         weights=WeightsDescr(
@@ -254,7 +277,7 @@ def export_bioimageio(config_bioimageio: BioimageioExportConfig):
                 pytorch_version=torch.__version__,
             )
         ),
-        cite=[CiteEntry(text=config_bioimageio.citation_text, doi=Doi(config_bioimageio.citation_doi))],  # TODO: update DOI
+        cite=[build_cite_entry(config_bioimageio)],
         config={
             "pixel_size": config_bioimageio.model_pixel_size, # custom field
             "min_diameter": config_bioimageio.min_diameter, # custom field
