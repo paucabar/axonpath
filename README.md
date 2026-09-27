@@ -98,3 +98,9 @@ If you use AxonPath in your work, please cite:
 > **Gomez-Sanchez, J.A., Rondelli, A., Williams, A., Bankhead, P.**
 > *AxonWrap: multi-head segmentation for myelin analysis across microscopy modalities.*
 > [Preprint placeholder link]
+
+## License
+
+The source code is released under the [Apache License 2.0](LICENSE).
+
+The pretrained model weights (`axonpath/weights/`, also distributed as BioImage.IO packages on [Zenodo](https://doi.org/10.5281/zenodo.22982902)) and the example images (`axonpath/example_images/`) are released under the [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/) license.
