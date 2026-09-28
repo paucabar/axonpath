@@ -15,7 +15,7 @@ import torch
 # ---------------------------------------------------------------------------
 
 def test_run_inference_output_shapes():
-    """run_inference must return correctly shaped arrays for all three outputs."""
+    """run_inference must return correctly shaped arrays for all four outputs."""
     from axonpath.inference.inference import run_inference
     from axonpath.utils.model_building import model_fn
 

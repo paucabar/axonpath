@@ -102,7 +102,9 @@ def train(config: TrainingConfig):
 
     train_loss, val_loss = [], []
     f1_fibre, f1_axon, f1_inner_cylinder = [], [], []
-    balanced_seg_score, best_score = [], 0
+    # -1 (below any possible score) so the first epoch always writes best_weights_model.pth,
+    # even if the score never rises above 0 (e.g. a very short run)
+    balanced_seg_score, best_score = [], -1
     last_epoch = 0
     _es_best = 0.0
     _es_counter = 0
