@@ -11,7 +11,7 @@ def main():
     parser.add_argument("--model_name", type=str, default="axonpath", help="Name of the model")
     parser.add_argument("--model_version", type=str, default="0.1.0", help="Version of the model")
     parser.add_argument("--pixel_size", type=float, default=0.008, help="Pixel size in microns")
-    parser.add_argument("--min_diameter", type=float, default=30.0, help="Expected minimum diameter")
+    parser.add_argument("--min_diameter", type=float, default=30.0, help="Minimum fibre diameter in pixels, at the model pixel size (EM: 20, brightfield: 15)")
     parser.add_argument("--citation_text", type=str, default="Carrillo-Barberà et al.", help="Citation text")
     parser.add_argument(
         "--citation_doi",

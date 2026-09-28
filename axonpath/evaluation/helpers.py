@@ -8,8 +8,8 @@ from axonpath.utils.visualization import show_images
 from axonpath.inference.post_processing import (
     apply_semantic_segmentation_head,
     segment_instances_from_sdt,
+    segment_inner_cylinders,
 )
-from axonpath.utils.image_processing import fill_labels
 from axonpath.utils.label_ops import map_axon_labels_to_fibres
 from axonpath.evaluation.segmentation_evaluator import SegmentationEvaluator
 from axonpath.utils.losses import compute_loss
@@ -107,18 +107,9 @@ def evaluate_instance_metrics(pred, target, fibre_threshold, axon_threshold, min
     pred_axon = remove_small_objects(pred_axon, max_size=max(0, min_axon_area - 1))
     pred_axon = map_axon_labels_to_fibres(pred_fibre, pred_axon)
 
-    # Inner Cylinder: semantic class 2 → fill holes → remove small → map to fibres
-    min_diameter_inner_cylinder = min_diameter / 2
-    radius = min_diameter_inner_cylinder / 2
-    min_area = int(np.pi * radius ** 2)
-
-    pred_inner_cylinder = label((sem_np == 2).astype(np.int32), connectivity=2)
-    pred_inner_cylinder = fill_labels(pred_inner_cylinder)
-    pred_inner_cylinder = label(
-        remove_small_objects(pred_inner_cylinder > 0, max_size=max(0, min_area - 1), connectivity=2),
-        connectivity=2
-    )
-    pred_inner_cylinder = map_axon_labels_to_fibres(pred_fibre, pred_inner_cylinder)
+    # Inner Cylinder: semantic class 2 → fill holes → remove small → map to fibres.
+    # Mirrors run_inference exactly.
+    pred_inner_cylinder = segment_inner_cylinders(sem_np, pred_fibre, min_diameter)
 
     # Ground truth
     gt_fibre = target[0].cpu().numpy().astype(np.int32)

@@ -2,7 +2,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage.measure import label
-from skimage.morphology import remove_small_objects
 import csv
 import pandas as pd
 from tqdm import tqdm
@@ -10,8 +9,6 @@ from axonpath.evaluation.segmentation_evaluator import SegmentationEvaluator
 from axonpath.inference.inference import load_model, run_inference
 from axonpath.dataset.axonpath_dataset import AxonPathDataset
 from axonpath.utils.visualization import plot_iou_distributions
-from axonpath.utils.image_processing import fill_labels
-from axonpath.utils.label_ops import map_axon_labels_to_fibres, remove_unmapped_labels
 
 def plot_segmentation_comparison(gt_fibre, gt_axon, gt_inner_cylinder, pred_fibre, pred_axon, pred_inner_cylinder, figsize=(20, 16), title=None):
     """
@@ -114,19 +111,9 @@ def evaluate_model_on_testset(model_path, test_dir, device, min_diameter, output
         sample = dataset.__getitem__(idx)
         image, masks = sample
 
-        pred_fibre, pred_axon, pred_semantic = run_inference(image.numpy(), model, device, min_diameter=min_diameter)
-        pred_inner_cylinder = label(pred_semantic == 2, connectivity=2)
-
-        # Estimate Inner Cylinder min area from min_diameter
-        min_diameter_inner_cylinder = min_diameter / 2
-        radius = min_diameter_inner_cylinder / 2
-        min_area = int(np.pi * radius ** 2)
-        pred_inner_cylinder = fill_labels(pred_inner_cylinder)
-        pred_inner_cylinder = label(
-            remove_small_objects(pred_inner_cylinder > 0, min_size=max(1, min_area), connectivity=2),
-            connectivity=2,
+        pred_fibre, pred_axon, mapped_inner_cylinder, pred_semantic = run_inference(
+            image.numpy(), model, device, min_diameter=min_diameter
         )
-        mapped_inner_cylinder = map_axon_labels_to_fibres(pred_fibre, pred_inner_cylinder)
 
         gt_fibre = masks[0].numpy()
         gt_axon = masks[1].numpy()

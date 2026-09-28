@@ -10,7 +10,7 @@ class BioimageioExportConfig:
     test_img_path: str                 # Input image for generating test input/output
     output_dir: str                      # Exported model directory
     model_pixel_size: float               # µm per pixel
-    min_diameter: float                    # Minimum expected diameter
+    min_diameter: float                    # Minimum fibre diameter in pixels, at model_pixel_size
     tile_size: int = 512                   # Minimum input tile size enforced by the Pipeline wrapper
     predict_inner_cylinder: bool = True      # Only predicts fibre and axon if false
     readme_text: Optional[str] = None      # Optional custom README text

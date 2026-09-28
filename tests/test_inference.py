@@ -23,7 +23,7 @@ def test_run_inference_output_shapes():
     model = model_fn("cpu", norm_type="batch")
     image = np.random.default_rng(0).uniform(0, 1, (H, W)).astype(np.float32)
 
-    labels_fibre, labels_axon, semantic = run_inference(
+    labels_fibre, labels_axon, labels_inner_cylinder, semantic = run_inference(
         image, model, device="cpu", roi_size=(64, 64), min_diameter=10.0
     )
 
@@ -32,29 +32,76 @@ def test_run_inference_output_shapes():
     assert semantic.dtype == np.uint8, f"semantic dtype {semantic.dtype} != uint8"
     assert np.issubdtype(labels_fibre.dtype, np.integer), "labels_fibre must be integer dtype"
 
-    if labels_axon is not None:
-        assert labels_axon.shape == (H, W), f"labels_axon shape {labels_axon.shape} != {(H, W)}"
-        assert np.issubdtype(labels_axon.dtype, np.integer), "labels_axon must be integer dtype"
+    for name, arr in [("labels_axon", labels_axon), ("labels_inner_cylinder", labels_inner_cylinder)]:
+        assert arr is not None, f"{name} must be returned by default"
+        assert arr.shape == (H, W), f"{name} shape {arr.shape} != {(H, W)}"
+        assert np.issubdtype(arr.dtype, np.integer), f"{name} must be integer dtype"
 
 
 # ---------------------------------------------------------------------------
-# 2. predict_inner_cylinder=False returns None
+# 2. predict_inner_cylinder=False skips inner cylinders only, never axons
 # ---------------------------------------------------------------------------
 
-def test_run_inference_no_inner_cylinder():
-    """predict_inner_cylinder=False must return None as the second element."""
+def test_run_inference_no_inner_cylinder_keeps_axons():
+    """predict_inner_cylinder=False must return None for inner cylinders only.
+
+    As in the extension (brightfield models), the flag controls inner cylinders;
+    fibres and axons must be identical to the default call. A previous version
+    dropped the axons instead.
+    """
     from axonpath.inference.inference import run_inference
     from axonpath.utils.model_building import model_fn
 
+    torch.manual_seed(0)
     model = model_fn("cpu", norm_type="batch")
     image = np.random.default_rng(1).uniform(0, 1, (64, 64)).astype(np.float32)
+    kwargs = dict(device="cpu", roi_size=(64, 64), min_diameter=10.0)
 
-    _, labels_axon, _ = run_inference(
-        image, model, device="cpu", roi_size=(64, 64),
-        min_diameter=10.0, predict_inner_cylinder=False
-    )
+    fibre_on, axon_on, _, sem_on = run_inference(image, model, **kwargs)
+    fibre_off, axon_off, ic_off, sem_off = run_inference(image, model, predict_inner_cylinder=False, **kwargs)
 
-    assert labels_axon is None, "Expected None for labels_axon when predict_inner_cylinder=False"
+    assert ic_off is None, "Expected None for inner cylinders when predict_inner_cylinder=False"
+    assert axon_off is not None, "Axons must be returned when predict_inner_cylinder=False"
+    np.testing.assert_array_equal(fibre_on, fibre_off)
+    np.testing.assert_array_equal(axon_on, axon_off)
+    np.testing.assert_array_equal(sem_on, sem_off)
+
+
+# ---------------------------------------------------------------------------
+# 2b. segment_inner_cylinders: fill, size filter and fibre mapping
+# ---------------------------------------------------------------------------
+
+def test_segment_inner_cylinders():
+    """Inner cylinders take their parent fibre's ID; holes are filled; regions that are
+    too small or outside any fibre are dropped."""
+    from axonpath.inference.post_processing import segment_inner_cylinders
+
+    H, W = 96, 96
+    y, x = np.mgrid[0:H, 0:W]
+    semantic = np.zeros((H, W), dtype=np.uint8)
+    labels_fibre = np.zeros((H, W), dtype=np.int32)
+
+    # Fibre 7 with an inner cylinder (radius 8) that has a 1-pixel hole
+    d1 = np.hypot(y - 24, x - 24)
+    labels_fibre[d1 <= 14] = 7
+    semantic[d1 <= 14] = 1
+    semantic[d1 <= 8] = 2
+    semantic[24, 24] = 1  # hole inside the inner cylinder
+
+    # Fibre 3 with a tiny inner cylinder (radius 1): below the size limit for min_diameter=20
+    d2 = np.hypot(y - 70, x - 24)
+    labels_fibre[d2 <= 10] = 3
+    semantic[d2 <= 10] = 1
+    semantic[d2 <= 1] = 2
+
+    # An inner-cylinder region outside any fibre
+    semantic[np.hypot(y - 48, x - 75) <= 8] = 2
+
+    ic = segment_inner_cylinders(semantic, labels_fibre, min_diameter=20.0)
+
+    assert set(np.unique(ic)) == {0, 7}, f"Unexpected inner cylinder IDs: {np.unique(ic)}"
+    assert ic[24, 24] == 7, "Hole inside the inner cylinder was not filled"
+    assert np.all(labels_fibre[ic > 0] == ic[ic > 0]), "Inner cylinder IDs must match their parent fibre"
 
 
 # ---------------------------------------------------------------------------

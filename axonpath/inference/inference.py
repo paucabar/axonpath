@@ -12,6 +12,7 @@ from axonpath.utils.image_processing import normalize
 from axonpath.inference.post_processing import (
     apply_semantic_segmentation_head,
     segment_instances_from_sdt,
+    segment_inner_cylinders,
 )
 from axonpath.utils.label_ops import map_axon_labels_to_fibres
 
@@ -99,7 +100,7 @@ def run_inference(
     sw_batch_size: int = 1,
     overlap: float = 0.75,
     predict_inner_cylinder: bool = True,
-) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray], np.ndarray]:
     """
     Run inference on a single image using MONAI sliding window.
 
@@ -124,17 +125,19 @@ def run_inference(
             roughly half the fibre diameter).
         sw_batch_size (int): Number of tiles processed in parallel.
         overlap (float): Fractional overlap between adjacent sliding windows.
-        predict_inner_cylinder (bool): If False, skip axon postprocessing and
-            return None as the second element. Mirrors the extension's
-            predict_inner_cylinder flag. Named after the InnerCylinder level in
-            the extension hierarchy (Fibre > InnerCylinder > Axon), which is
-            populated from the axon SDT predictions.
+        predict_inner_cylinder (bool): Whether to create inner cylinder instances
+            (axon plus inner tongue) from the semantic map. True for EM; False for
+            brightfield, where the inner tongue cannot be resolved. Mirrors the
+            predict_inner_cylinder key of the exported rdf.yaml: fibres and axons
+            are returned either way.
 
     Returns:
         labels_fibre (np.ndarray): Fibre instance labels.
-        labels_axon (np.ndarray | None): Axon instance labels mapped to their
+        labels_axon (np.ndarray): Axon instance labels mapped to their
             parent fibre (each axon label ID equals its parent fibre label ID).
-            None if predict_inner_cylinder is False.
+        labels_inner_cylinder (np.ndarray | None): Inner cylinder instance labels
+            mapped to their parent fibre (see segment_inner_cylinders), or None
+            if predict_inner_cylinder is False.
         semantic (np.ndarray): Semantic segmentation map
             (0=background, 1=fibre, 2=inner_cylinder).
     """
@@ -177,9 +180,6 @@ def run_inference(
     min_fibre_area = int(np.pi * (min_diameter / 2) ** 2)
     labels_fibre = remove_small_objects(labels_fibre, max_size=max(0, min_fibre_area - 1))
 
-    if not predict_inner_cylinder:
-        return labels_fibre, None, semantic
-
     # Axon instance segmentation — no explicit valid_mask: segment_instances_from_sdt
     # defaults to distancemap >= 0, which correctly restricts watershed to pixels where
     # the model predicts positive axon SDT (inside the axon). Using semantic >= 2 instead
@@ -194,4 +194,9 @@ def run_inference(
 
     labels_axon = map_axon_labels_to_fibres(labels_fibre, labels_axon)
 
-    return labels_fibre, labels_axon, semantic
+    # Inner cylinder instances from the semantic head (class 2) — no watershed needed
+    labels_inner_cylinder = None
+    if predict_inner_cylinder:
+        labels_inner_cylinder = segment_inner_cylinders(semantic, labels_fibre, min_diameter)
+
+    return labels_fibre, labels_axon, labels_inner_cylinder, semantic

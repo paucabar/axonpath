@@ -7,6 +7,7 @@ from skimage.measure import label
 from skimage.morphology import remove_small_objects
 import edt
 from axonpath.utils.image_processing import fill_labels
+from axonpath.utils.label_ops import map_axon_labels_to_fibres
 
 
 def apply_semantic_segmentation_head(pred: torch.Tensor):
@@ -152,3 +153,35 @@ def merge_unmatched_fibres(
             output[y_min:y_max, x_min:x_max][region_mask] = best_label
 
     return output
+
+
+def segment_inner_cylinders(
+    semantic: np.ndarray,
+    labels_fibre: np.ndarray,
+    min_diameter: float = 30.0,
+) -> np.ndarray:
+    """
+    Inner cylinder instances from the semantic map, mapped to their parent fibres.
+
+    The inner cylinder (axon plus inner tongue) is predicted by the semantic head as
+    class 2, so no watershed is needed: connected regions are labelled, their holes
+    filled, small regions removed, and each region given the ID of the fibre that
+    contains it (regions outside any fibre are dropped).
+
+    Parameters:
+        semantic (np.ndarray): Semantic map (0=background, 1=fibre, 2=inner_cylinder).
+        labels_fibre (np.ndarray): Fibre instance labels.
+        min_diameter (float): Expected minimum fibre diameter in pixels. As for axons,
+            the minimum inner cylinder diameter is min_diameter / 2; regions smaller
+            than a circle of that diameter are removed.
+
+    Returns:
+        np.ndarray: Inner cylinder labels, each with the label ID of its parent fibre.
+    """
+    min_area = int(np.pi * (min_diameter / 4) ** 2)  # circle of diameter min_diameter / 2
+    inner_cylinder = fill_labels(label(semantic == 2, connectivity=2))
+    inner_cylinder = label(
+        remove_small_objects(inner_cylinder > 0, max_size=max(0, min_area - 1), connectivity=2),
+        connectivity=2,
+    )
+    return map_axon_labels_to_fibres(labels_fibre, inner_cylinder)

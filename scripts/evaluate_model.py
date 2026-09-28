@@ -11,7 +11,7 @@ def main():
 
     parser.add_argument("--test_dir", type=str, required=True, help="Path to test tiles directory")
     parser.add_argument("--model_path", type=str, required=True, help="Path to trained model (.pth file)")
-    parser.add_argument("--min_diameter", type=float, default=30.0, help="Minimum fibre diameter in µm")
+    parser.add_argument("--min_diameter", type=float, default=30.0, help="Minimum fibre diameter in pixels")
     parser.add_argument("--output_csv", type=str, default="Evaluation_Results", help="Prefix for output CSV files")
     parser.add_argument("--display_figure", action="store_true", help="Show ground truth and target tiles")
     parser.add_argument("--no_plots", action="store_true", help="Disable summary bar plots")
