@@ -26,3 +26,4 @@ dependencies:
       - edt==3.1.1
       - bioimageio-core==0.9.6
       - bioimageio-spec==0.5.7.4
+      - -e ..   # the axonpath package itself (path is relative to this file)

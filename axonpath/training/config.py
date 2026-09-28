@@ -24,7 +24,7 @@ class TrainingConfig:
     min_diameter: float = 30.0      # pixels; axon minimum is derived as min_diameter / 2
     train_dir: str = "prepared_data/train_tiles/"
     val_dir: str = "prepared_data/val_tiles/"
-    pretrained_weights: str = None  # path to a .pth file or built-in weight name (e.g. 'axonpath')
+    pretrained_weights: str = None  # path to a .pth file or built-in weight name ('em' or 'bf')
     load_checkpoint: bool = False   # resume training from <output_dir>/model_checkpoint.pth.tar
     model_name: str = "axonpath"
     output_dir: str = "."           # all training outputs (weights, checkpoint, plots) are written here

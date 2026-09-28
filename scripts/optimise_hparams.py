@@ -1,7 +1,7 @@
 ﻿"""
 Hyperparameter optimisation for axonpath models.
 
-Requires: pip install optuna  (development tool — not in environment.yml)
+Requires the hpo extra: pip install -e ".[hpo]"
 
 Usage examples
 --------------
