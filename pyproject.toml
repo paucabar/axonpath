@@ -21,6 +21,7 @@ dependencies = [
     "monai>=1.5",
     "edt>=3.0",
     "bioimageio-spec>=0.5",
+    "bioimageio-core>=0.9",
     "Pillow",
 ]
 

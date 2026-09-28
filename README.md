@@ -62,8 +62,9 @@ conda activate axonpath
 ```
 
 Requires Python 3.11. A CUDA-capable GPU is strongly recommended for training; data preparation
-and inference can run on CPU. Tested with PyTorch 2.7.1 and CUDA 12.8. You may adjust the
-`pytorch-cuda` version in `envs/environment.yml` to match your drivers; see
+and inference can run on CPU. Tested with PyTorch 2.7.1 and CUDA 12.8. PyTorch is installed
+from its pip index for CUDA 12.8 (`cu128`); to match your drivers, change `cu128` in
+`envs/environment.yml` (three lines); see
 [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) for compatible
 combinations.
 
