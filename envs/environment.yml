@@ -1,26 +1,26 @@
 name: axonpath
 channels:
-  - pytorch
-  - nvidia
   - conda-forge
-  - defaults
 dependencies:
   - python=3.11
-  - pytorch=2.7.1
-  - torchvision=0.22.1
-  - torchaudio=2.7.1
-  - pytorch-cuda=12.8
-  - numpy>=2.0
-  - pandas>=2.0
-  - matplotlib
-  - scikit-image
-  - scikit-learn
-  - tqdm
-  - colorcet
-  - ipykernel
-  - scipy
   - pip
   - pip:
+      # All packages come from pip. PyTorch is no longer published as conda packages,
+      # and mixing conda's numeric libraries with pip PyTorch loads two OpenMP runtimes.
+      # PyTorch comes from its own index: cu128 = CUDA 12.8; change it in all three lines
+      # to match your drivers (see https://pytorch.org/get-started/locally/).
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.7.1+cu128
+      - torchvision==0.22.1+cu128
+      - numpy==2.3.5
+      - scipy==1.17.1
+      - scikit-image==0.26.0
+      - scikit-learn==1.8.0
+      - pandas==3.0.1
+      - matplotlib==3.10.8
+      - tqdm==4.67.3
+      - colorcet==3.1.0
+      - ipykernel==7.2.0
       - monai==1.5.1
       - tensorboard==2.20.0
       - edt==3.1.1
