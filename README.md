@@ -175,8 +175,8 @@ training data. It is installed through QuPath's Extension Manager; see its
 
 ## Training datasets
 
-Raw imaging datasets and annotations used for developing AxonPath are available at:
-[Dataset repository placeholder]
+Raw imaging datasets and annotations used for developing AxonPath are available on Zenodo:
+**[doi.org/10.5281/zenodo.23084690](https://doi.org/10.5281/zenodo.23084690)**.
 
 ## Running the tests
 
@@ -191,6 +191,9 @@ A preprint describing AxonPath is in preparation. Citation details will be added
 
 To cite the models, use their Zenodo record:
 [doi.org/10.5281/zenodo.22982902](https://doi.org/10.5281/zenodo.22982902).
+
+To cite the training datasets, use their Zenodo record:
+[doi.org/10.5281/zenodo.23084690](https://doi.org/10.5281/zenodo.23084690).
 
 ## License
 
